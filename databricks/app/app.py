@@ -5,225 +5,260 @@ from datetime import datetime
 
 # ─── PAGE CONFIG ─────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="LexAI | Legal Intel",
+    page_title="LexAI | Legal Command",
     page_icon="⚖️",
     layout="wide",
 )
 
-# ─── THE "CLAUDE SOBER" DESIGN SYSTEM ────────────────────────────────────────
+# ─── THE ELITE "SOBER" DESIGN SYSTEM ─────────────────────────────────────────
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap');
 
+    /* Color Palette - Stone & Paper */
     :root {
-        --bg-color: #F9F8F6;
-        --sidebar-color: #F3F2EE;
-        --text-main: #1A1A1A;
-        --text-muted: #656565;
-        --border-color: #E5E3DA;
+        --bg-color: #F7F7F2;
+        --sidebar-color: #EFEDE7;
+        --text-main: #1D1D1B;
+        --text-muted: #6B6B63;
+        --border: #E1E1D9;
         --accent: #D97757;
+        --ai-bubble-bg: transparent;
+        --user-bubble-bg: #E7E4DB;
     }
 
     .stApp { background-color: var(--bg-color); color: var(--text-main); font-family: 'Inter', sans-serif; }
     #MainMenu, footer, header { visibility: hidden; }
 
-    /* Sidebar - Navigation & History */
-    [data-testid="stSidebar"] {
-        background-color: var(--sidebar-color) !important;
-        border-right: 1px solid var(--border-color);
-        padding: 20px 10px;
-    }
-
-    /* Conversation History Items */
-    .history-item {
-        padding: 10px 14px;
-        border-radius: 8px;
-        margin-bottom: 5px;
-        font-size: 13.5px;
-        color: var(--text-main);
-        cursor: pointer;
-        transition: all 0.2s;
-        border: 1px solid transparent;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    .history-item:hover {
-        background: #EAE8E0;
-        border-color: var(--border-color);
-    }
-    .history-item.active {
-        background: #EAE8E0;
-        font-weight: 500;
-        border-color: var(--border-color);
-    }
-
-    /* Main Chat Area */
-    .main-chat-container {
+    /* Centered Chat Layout */
+    .chat-wrapper {
         max-width: 800px;
         margin: 0 auto;
+        padding-top: 60px;
         padding-bottom: 150px;
     }
 
-    /* Chat Bubbles */
-    .ai-message {
-        font-size: 16px;
-        line-height: 1.6;
-        margin-bottom: 40px;
-        padding-bottom: 20px;
-        border-bottom: 1px solid var(--border-color);
-    }
-    .user-message {
-        background: #F0EDE4;
-        padding: 12px 20px;
-        border-radius: 15px;
-        display: inline-block;
-        margin-bottom: 30px;
-        align-self: flex-end;
-        max-width: 85%;
-        font-size: 15px;
+    /* Sidebar - High End Navigation */
+    [data-testid="stSidebar"] {
+        background-color: var(--sidebar-color) !important;
+        border-right: 1px solid var(--border);
+        padding: 20px 10px;
     }
 
-    /* File Chip */
-    .file-chip {
-        display: inline-flex;
-        align-items: center;
-        background: white;
-        border: 1px solid var(--border-color);
-        padding: 8px 15px;
+    .history-card {
+        padding: 12px 14px;
         border-radius: 10px;
-        margin-bottom: 15px;
-        font-size: 13px;
+        margin-bottom: 6px;
+        font-size: 13.5px;
+        color: var(--text-main);
+        cursor: pointer;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        border: 1px solid transparent;
+        background: transparent;
+    }
+    .history-card:hover {
+        background: #E4E1D8;
+        border-color: var(--border);
+        transform: translateX(4px);
+    }
+    .history-active {
+        background: #E4E1D8;
+        font-weight: 500;
+        border-color: var(--border);
     }
 
-    /* Buttons */
-    .stButton>button {
-        border-radius: 8px !important;
-        background: white !important;
-        border: 1px solid var(--border-color) !important;
-        color: var(--text-main) !important;
-        font-weight: 500 !important;
+    /* Chat Bubbles - Claude Style */
+    .ai-row {
+        margin-bottom: 48px;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 32px;
+        animation: fadeIn 0.5s ease;
     }
+    .user-row {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 32px;
+        animation: slideIn 0.3s ease;
+    }
+    .user-bubble {
+        background: var(--user-bubble-bg);
+        padding: 14px 22px;
+        border-radius: 20px 20px 4px 20px;
+        font-size: 15.5px;
+        line-height: 1.5;
+        max-width: 85%;
+        color: var(--text-main);
+    }
+
+    /* Analysis Report Card */
+    .report-card {
+        background: #FFFFFF;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 24px;
+        margin-top: 20px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+    }
+    .risk-badge {
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 12px;
+        display: inline-block;
+    }
+
+    /* Input HUD */
+    .stChatInputContainer {
+        border-top: 1px solid var(--border) !important;
+        background: var(--bg-color) !important;
+        padding: 20px 0 !important;
+    }
+
+    /* Animations */
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
 </style>
 """, unsafe_allow_html=True)
 
-# ─── DATABASE LAYER (MOCK) ───────────────────────────────────────────────────
-# In a real app, replace these with: 
-# conn = sqlite3.connect('lex.db') or your SQL Alchemy logic
-def fetch_conversations():
-    """Fetch all chat sessions from DB"""
-    if "db_mock" not in st.session_state:
-        st.session_state.db_mock = [
-            {"id": "1", "title": "Service Agreement Analysis", "timestamp": "2026-04-15"},
-            {"id": "2", "title": "NDA Review", "timestamp": "2026-04-16"}
+# ─── DATABASE LAYER ──────────────────────────────────────────────────────────
+# Connects to session_state to persist chats during session
+def get_db_chats():
+    if "db_chats" not in st.session_state:
+        st.session_state.db_chats = [
+            {"id": str(uuid.uuid4()), "title": "MSA Risk Audit", "time": "2h ago"},
+            {"id": str(uuid.uuid4()), "title": "Consulting Rewrite", "time": "5h ago"},
         ]
-    return st.session_state.db_mock
+    return st.session_state.db_chats
 
-def save_new_conversation(title):
-    """Save a new chat session to DB"""
-    new_id = str(uuid.uuid4())
-    new_entry = {
-        "id": new_id,
-        "title": title[:30] + "...",
-        "timestamp": datetime.now().strftime("%Y-%m-%d")
-    }
-    st.session_state.db_mock.insert(0, new_entry)
-    return new_id
+def commit_to_db(title):
+    new_chat = {"id": str(uuid.uuid4()), "title": title[:28] + "...", "time": "Just now"}
+    st.session_state.db_chats.insert(0, new_chat)
+    return new_chat["id"]
 
-# ─── SESSION STATE MANAGEMENT ───────────────────────────────────────────────
-if "current_chat_id" not in st.session_state:
-    st.session_state.current_chat_id = None
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
-if "uploaded_filename" not in st.session_state:
-    st.session_state.uploaded_filename = None
+# ─── STATE MANAGEMENT ────────────────────────────────────────────────────────
+if "active_id" not in st.session_state:
+    st.session_state.active_id = None
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "file_name" not in st.session_state:
+    st.session_state.file_name = None
 
-# ─── SIDEBAR: DB FETCH & NEW CHAT ────────────────────────────────────────────
+# ─── SIDEBAR ──────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("<h2 style='font-family:Source Serif 4; margin-bottom:20px;'>LexAI</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='font-family:Source Serif 4; font-size: 26px; padding: 10px 0;'>LexAI</h2>", unsafe_allow_html=True)
     
     if st.button("＋ New Chat", use_container_width=True):
-        st.session_state.current_chat_id = None
-        st.session_state.chat_history = []
-        st.session_state.uploaded_filename = None
+        st.session_state.active_id = None
+        st.session_state.messages = []
+        st.session_state.file_name = None
         st.rerun()
 
-    st.markdown("<br><div style='font-size: 11px; font-weight: 600; color: #888; letter-spacing: 0.5px; margin-bottom: 10px;'>CONVERSATIONS</div>", unsafe_allow_html=True)
+    st.markdown("<div style='height: 30px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='font-size: 11px; font-weight: 600; color: #999; letter-spacing: 0.8px; margin-bottom: 12px;'>HISTORY</div>", unsafe_allow_html=True)
     
-    # Fetch from DB
-    conversations = fetch_conversations()
-    for conv in conversations:
-        is_active = "active" if st.session_state.current_chat_id == conv['id'] else ""
+    chats = get_db_chats()
+    for c in chats:
+        active_class = "history-active" if st.session_state.active_id == c['id'] else ""
         st.markdown(f"""
-            <div class="history-item {is_active}">
-                <span>📄 {conv['title']}</span>
+            <div class="history-card {active_class}">
+                <div style="font-weight: 500;">📄 {c['title']}</div>
+                <div style="font-size: 10px; color: #999; margin-top: 2px;">{c['time']}</div>
             </div>
         """, unsafe_allow_html=True)
 
-# ─── MAIN CONTENT ─────────────────────────────────────────────────────────────
-st.markdown('<div class="main-chat-container">', unsafe_allow_html=True)
+# ─── MAIN INTERFACE ──────────────────────────────────────────────────────────
+st.markdown('<div class="chat-wrapper">', unsafe_allow_html=True)
 
-# 1. Start State: Logo and File Upload
-if not st.session_state.chat_history:
+# 1. Empty State
+if not st.session_state.messages:
     st.markdown("""
-        <div style="text-align: center; margin-top: 15vh; margin-bottom: 40px;">
-            <h1 style="font-family: Source Serif 4; font-size: 36px; margin-bottom: 10px;">How can I assist you?</h1>
-            <p style="color: #666; font-size: 17px;">Upload a legal document to begin a risk audit.</p>
+        <div style="text-align: center; margin-top: 12vh;">
+            <h1 style="font-family: Source Serif 4; font-size: 42px; font-weight: 600; color: #1a1a1a;">Analyze your contract.</h1>
+            <p style="color: #6B6B63; font-size: 18px; margin-top: 10px;">Upload a legal document to map risks and generate counter-clauses.</p>
         </div>
     """, unsafe_allow_html=True)
     
-    # The centered upload box
-    up_file = st.file_uploader("Upload", type=['pdf', 'docx'], label_visibility="collapsed")
-    if up_file:
-        st.session_state.uploaded_filename = up_file.name
-        # Simulate Analysis
-        with st.spinner("Analyzing document..."):
-            time.sleep(1.5)
-            # DATABASE ACTION: Create new record on first interaction
-            chat_id = save_new_conversation(f"Analysis: {up_file.name}")
-            st.session_state.current_chat_id = chat_id
-            
-            st.session_state.chat_history.append({"role": "user", "content": f"Analyze {up_file.name}"})
-            st.session_state.chat_history.append({"role": "ai", "content": "I've processed the document. I found **4 critical issues** in the Indemnity section. Would you like me to summarize the risks or draft a counter-clause?"})
+    st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
+    
+    # Styled Uploader
+    up = st.file_uploader("Upload", type=['pdf', 'docx'], label_visibility="collapsed")
+    if up:
+        st.session_state.file_name = up.name
+        with st.spinner("Processing neural audit..."):
+            time.sleep(1.8)
+            # Commit to DB on first action
+            st.session_state.active_id = commit_to_db(f"Audit: {up.name}")
+            st.session_state.messages.append({"role": "user", "content": f"Analyze {up.name}"})
+            st.session_state.messages.append({
+                "role": "ai", 
+                "content": f"I've completed the audit for **{up.name}**. I found significant liability exposure in the Intellectual Property section. Would you like a breakdown of the risks?",
+                "type": "report"
+            })
             st.rerun()
 
-# 2. Chat History Display
-for chat in st.session_state.chat_history:
-    if chat["role"] == "user":
-        st.markdown(f'<div style="text-align: right;"><div class="user-message">{chat["content"]}</div></div>', unsafe_allow_html=True)
+# 2. Conversation Stream
+for m in st.session_state.messages:
+    if m["role"] == "user":
+        st.markdown(f'<div class="user-row"><div class="user-bubble">{m["content"]}</div></div>', unsafe_allow_html=True)
     else:
-        st.markdown(f"""
-            <div class="ai-message">
-                <div style="font-weight: 600; font-size: 13px; color: #888; margin-bottom: 10px; letter-spacing: 0.5px;">LEXAI ASSISTANT</div>
-                {chat["content"]}
-            </div>
-        """, unsafe_allow_html=True)
-
-st.markdown('</div>', unsafe_allow_html=True) # End Container
-
-# 3. Persistent Input Bar
-if prompt := st.chat_input("Ask about specific clauses or request a rewrite..."):
-    # If it's a fresh chat without a file, create DB entry on first text
-    if st.session_state.current_chat_id is None:
-        chat_id = save_new_conversation(prompt)
-        st.session_state.current_chat_id = chat_id
+        st.markdown('<div class="ai-row">', unsafe_allow_html=True)
+        st.markdown('<div style="font-weight: 600; font-size: 12px; color: #999; margin-bottom: 12px; letter-spacing: 1px;">LEXAI</div>', unsafe_allow_html=True)
+        st.write(m["content"])
         
-    st.session_state.chat_history.append({"role": "user", "content": prompt})
+        # Premium Report Card
+        if m.get("type") == "report":
+            st.markdown("""
+                <div class="report-card">
+                    <span class="risk-badge" style="background: #FEE2E2; color: #991B1B;">Critical</span>
+                    <div style="font-weight: 600; font-size: 17px; margin-bottom: 4px;">Indemnification Gap</div>
+                    <div style="font-size: 14px; color: var(--text-muted); line-height: 1.5;">
+                        Clause 8.2 creates an uncapped indemnity for third-party IP claims. Industry standard is to cap this at 2x the annual contract value.
+                    </div>
+                    <hr style="margin: 20px 0; opacity: 0.1;">
+                    <span class="risk-badge" style="background: #FEF3C7; color: #92400E;">Moderate</span>
+                    <div style="font-weight: 600; font-size: 17px; margin-bottom: 4px;">Governing Law</div>
+                    <div style="font-size: 14px; color: var(--text-muted); line-height: 1.5;">
+                        The contract defaults to California law but lacks an arbitration sub-clause, which may lead to costly litigation.
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+st.markdown('</div>', unsafe_allow_html=True) # End chat-wrapper
+
+# ─── INPUT SYSTEM ─────────────────────────────────────────────────────────────
+if prompt := st.chat_input("Ask for a rewrite or specific legal analysis..."):
+    # If no active chat, start one in DB
+    if not st.session_state.active_id:
+        st.session_state.active_id = commit_to_db(prompt)
+        
+    st.session_state.messages.append({"role": "user", "content": prompt})
     
-    # Simulated response
-    with st.spinner("Thinking..."):
-        time.sleep(1)
-        response = f"I've analyzed your request regarding '{prompt}'. In legal contexts, this often triggers a 'Best Efforts' requirement. I recommend specifying a 'Reasonable Efforts' standard instead to lower your liability."
-        st.session_state.chat_history.append({"role": "ai", "content": response})
-    
+    with st.spinner("Processing..."):
+        time.sleep(1.2)
+        # Professional legal reasoning response
+        ans = "I've reviewed the language. While the clause is enforceable in most jurisdictions, adding a 'gross negligence' carve-out would significantly lower your exposure. Should I draft that version?"
+        st.session_state.messages.append({"role": "ai", "content": ans})
     st.rerun()
 
-# ─── FOOTER STATUS ────────────────────────────────────────────────────────────
-if st.session_state.uploaded_filename:
-    st.sidebar.markdown("---")
-    st.sidebar.markdown(f"""
-        <div class="file-chip">
-            <span style="margin-right:8px;">📎</span>
-            <span>{st.session_state.uploaded_filename}</span>
-        </div>
-    """, unsafe_allow_html=True)
+# ─── SIDEBAR FOOTER ───────────────────────────────────────────────────────────
+if st.session_state.file_name:
+    with st.sidebar:
+        st.markdown("---")
+        st.markdown(f"""
+            <div style="background: white; border: 1px solid var(--border); padding: 14px; border-radius: 12px; display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 18px;">📄</span>
+                <div style="overflow: hidden;">
+                    <div style="font-size: 11px; font-weight: 600; color: #1a1a1a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{st.session_state.file_name}</div>
+                    <div style="font-size: 10px; color: #999;">Audit in progress</div>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
