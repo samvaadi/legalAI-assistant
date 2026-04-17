@@ -1,7 +1,5 @@
-import React from 'react';
-import { Dashboard } from './pages/Dashboard';
-import './styles/global.css';
+command: ["streamlit", "run", "databricks/app/app.py"]
 
-export default function App() {
-  return <Dashboard />;
-}
+env:
+  - name: PYTHONUNBUFFERED
+    value: "1"
