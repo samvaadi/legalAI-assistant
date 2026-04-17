@@ -2,7 +2,6 @@ import streamlit as st
 import uuid
 import time
 import pandas as pd
-from datetime import datetime
 from databricks import sql
 
 # ─────────────────────────────────────────────────────────────
@@ -14,27 +13,24 @@ st.set_page_config(
     layout="wide"
 )
 
+TABLE_NAME = "default.chat_logs"  # ✅ use default schema
+
 # ─────────────────────────────────────────────────────────────
-# UI STYLING (CLEAN CLAUDE STYLE)
+# UI STYLING
 # ─────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
-
 .stApp {
     background-color: #0E0E10;
     color: #E4E4E7;
-    font-family: 'Inter', sans-serif;
+    font-family: sans-serif;
 }
 header, footer { visibility: hidden; }
 
-/* Sidebar */
 [data-testid="stSidebar"] {
     background-color: #050505 !important;
-    border-right: 1px solid rgba(255,255,255,0.1);
 }
 
-/* Chat */
 .chat-container {
     max-width: 800px;
     margin: auto;
@@ -57,22 +53,11 @@ header, footer { visibility: hidden; }
     padding: 10px 16px;
     border-radius: 12px;
 }
-
-/* Sidebar buttons */
-.stButton > button {
-    text-align: left !important;
-    background: transparent !important;
-    border: none !important;
-    color: #888 !important;
-}
-.stButton > button:hover {
-    color: white !important;
-}
 </style>
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────
-# DATABASE CONNECTION
+# DB CONNECTION
 # ─────────────────────────────────────────────────────────────
 def get_db_conn():
     return sql.connect(
@@ -85,35 +70,46 @@ def get_db_conn():
 # DB FUNCTIONS
 # ─────────────────────────────────────────────────────────────
 def save_to_db(sid, title, role, content):
-    with get_db_conn() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute("""
-                INSERT INTO main.lex.chat_logs
-                (session_id, title, role, content, ts)
-                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-            """, (sid, title, role, content))
+    try:
+        with get_db_conn() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(f"""
+                    INSERT INTO {TABLE_NAME}
+                    (session_id, title, role, content, ts)
+                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                """, (sid, title, role, content))
+    except Exception as e:
+        st.error(f"DB Insert Error: {e}")
 
 
 def load_history_list():
-    with get_db_conn() as conn:
-        df = pd.read_sql("""
-            SELECT session_id, MAX(title) as title
-            FROM main.lex.chat_logs
-            GROUP BY session_id
-            ORDER BY MAX(ts) DESC
-        """, conn)
-    return df
+    try:
+        with get_db_conn() as conn:
+            return pd.read_sql(f"""
+                SELECT session_id, MAX(title) as title
+                FROM {TABLE_NAME}
+                GROUP BY session_id
+                ORDER BY MAX(ts) DESC
+            """, conn)
+    except Exception:
+        return pd.DataFrame()
 
 
 def fetch_session_messages(sid):
-    with get_db_conn() as conn:
-        df = pd.read_sql(f"""
-            SELECT role, content
-            FROM main.lex.chat_logs
-            WHERE session_id = '{sid}'
-            ORDER BY ts ASC
-        """, conn)
-    return df.to_dict("records")
+    try:
+        with get_db_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"""
+                SELECT role, content
+                FROM {TABLE_NAME}
+                WHERE session_id = ?
+                ORDER BY ts ASC
+            """, (sid,))
+            rows = cursor.fetchall()
+
+        return [{"role": r[0], "content": r[1]} for r in rows]
+    except Exception:
+        return []
 
 # ─────────────────────────────────────────────────────────────
 # SESSION STATE
@@ -140,7 +136,7 @@ with st.sidebar:
         st.rerun()
 
     st.markdown("---")
-    st.caption("History")
+    st.markdown("### 🧠 Chat History")
 
     history_df = load_history_list()
 
@@ -148,14 +144,14 @@ with st.sidebar:
         st.caption("No past sessions")
     else:
         for _, row in history_df.iterrows():
-            if st.button(f"📄 {row['title']}", key=row['session_id']):
-                st.session_state.sid = row['session_id']
-                st.session_state.messages = fetch_session_messages(row['session_id'])
-                st.session_state.chat_title = row['title']
+            if st.button(f"📄 {row['title']}", key=row["session_id"]):
+                st.session_state.sid = row["session_id"]
+                st.session_state.messages = fetch_session_messages(row["session_id"])
+                st.session_state.chat_title = row["title"]
                 st.rerun()
 
 # ─────────────────────────────────────────────────────────────
-# MAIN CHAT UI
+# CHAT UI
 # ─────────────────────────────────────────────────────────────
 st.markdown('<div class="chat-container">', unsafe_allow_html=True)
 
@@ -177,7 +173,7 @@ for m in st.session_state.messages:
 st.markdown('</div>', unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────
-# INPUT LOGIC
+# INPUT
 # ─────────────────────────────────────────────────────────────
 if prompt := st.chat_input("Ask about your contract..."):
 
@@ -188,6 +184,7 @@ if prompt := st.chat_input("Ask about your contract..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     save_to_db(st.session_state.sid, st.session_state.chat_title, "user", prompt)
 
+    # Fake AI response (replace later with real model)
     with st.spinner("Analyzing contract..."):
         time.sleep(1)
 
@@ -202,7 +199,7 @@ The indemnity clause is **non-mutual**, exposing one party disproportionately.
 - Define trigger conditions  
 """
 
-        st.session_state.messages.append({"role": "assistant", "content": response})
-        save_to_db(st.session_state.sid, st.session_state.chat_title, "assistant", response)
+    st.session_state.messages.append({"role": "assistant", "content": response})
+    save_to_db(st.session_state.sid, st.session_state.chat_title, "assistant", response)
 
     st.rerun()
