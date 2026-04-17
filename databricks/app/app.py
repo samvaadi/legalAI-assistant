@@ -2,222 +2,205 @@ import streamlit as st
 import time
 import uuid
 import pandas as pd
-# import databricks.sql as dbsql # Real DB connection
+# from sqlalchemy import create_engine # For real SQL integration
 
 # ─────────────────────────────────────────────────────────────
 # PAGE CONFIG
 # ─────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="ClauseBreaker AI",
+    page_title="LexAI Terminal",
     page_icon="⚖️",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
 # ─────────────────────────────────────────────────────────────
-# PRODUCTION DESIGN SYSTEM (CSS)
+# THE "ELITE" DESIGN SYSTEM (DARK SLATE & CHAMPAGNE)
 # ─────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono&display=swap');
 
 /* Global Reset */
 :root {
-    --bg-deep: #080809;
-    --glass-bg: rgba(255, 255, 255, 0.03);
-    --border: rgba(255, 255, 255, 0.08);
-    --accent: #D4AF37; /* Burnished Gold */
-    --accent-glow: rgba(212, 175, 55, 0.15);
-    --text-dim: #8B8B92;
+    --bg-color: #0D0D0F;
+    --sidebar-bg: #050505;
+    --card-bg: #161618;
+    --border-color: rgba(255, 255, 255, 0.08);
+    --accent-color: #D4AF6A;
+    --text-muted: #71717A;
 }
 
 .stApp {
-    background: radial-gradient(circle at 50% 0%, #151518 0%, var(--bg-deep) 100%);
-    color: #F4F4F5;
-    font-family: 'Plus Jakarta Sans', sans-serif;
+    background-color: var(--bg-color);
+    color: #E4E4E7;
+    font-family: 'Inter', sans-serif;
 }
 
-/* Hide Streamlit Chrome */
-header, footer, [data-testid="stHeader"] { visibility: hidden; height: 0; }
-.block-container { padding: 2rem 3rem !important; }
+/* Sidebar History Styling */
+[data-testid="stSidebar"] {
+    background-color: var(--sidebar-bg) !important;
+    border-right: 1px solid var(--border-color);
+}
 
-/* Dashboard HUD Layout */
-.hud-panel {
-    background: var(--glass-bg);
-    backdrop-filter: blur(20px);
-    border: 1px solid var(--border);
-    border-radius: 24px;
-    padding: 32px;
-    height: 85vh;
-    position: sticky;
-    top: 2rem;
-    box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+.history-pill {
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin-bottom: 4px;
+    font-size: 13px;
+    color: #A1A1AA;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.history-pill:hover {
+    background: #1A1A1C;
+    color: white;
+}
+
+/* Chat Layout Architecture */
+.chat-wrapper {
+    max-width: 850px;
+    margin: 0 auto;
+    padding-top: 20px;
 }
 
 /* Chat Bubbles */
-.chat-ai-row {
-    margin-bottom: 2rem;
+.ai-bubble {
     padding: 24px;
-    background: rgba(255,255,255,0.02);
-    border-left: 3px solid var(--accent);
-    border-radius: 4px 20px 20px 20px;
-    line-height: 1.6;
+    margin-bottom: 30px;
+    border-bottom: 1px solid var(--border-color);
+    line-height: 1.65;
+    font-size: 16px;
     animation: fadeIn 0.4s ease-out;
 }
 
-.chat-user-row {
-    background: #1C1C1E;
-    color: #FFFFFF;
-    padding: 14px 22px;
-    border-radius: 20px 20px 4px 20px;
-    margin-left: 20%;
-    margin-bottom: 1.5rem;
-    border: 1px solid var(--border);
-    font-size: 0.95rem;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+.user-bubble {
+    background-color: #27272A;
+    padding: 12px 20px;
+    border-radius: 18px 18px 2px 18px;
+    max-width: 85%;
+    margin-left: auto;
+    margin-bottom: 30px;
+    font-size: 15px;
+    border: 1px solid var(--border-color);
 }
 
-/* Metadata Fonts */
-.meta-label {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
-    color: var(--text-dim);
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    margin-bottom: 8px;
+/* The File Chip (Inside Chat) */
+.file-chip {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(212, 175, 106, 0.1);
+    border: 1px solid var(--accent-color);
+    padding: 6px 14px;
+    border-radius: 10px;
+    color: var(--accent-color);
+    font-size: 12px;
+    font-family: 'JetBrains Mono';
+    margin-bottom: 15px;
 }
 
-/* Risk Metrics */
-.risk-gauge {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 36px;
-    font-weight: 700;
-    color: var(--accent);
-    text-shadow: 0 0 15px var(--accent-glow);
-}
-
-/* Styled Uploader */
-[data-testid="stFileUploader"] {
-    background: #000;
-    border-radius: 12px;
-    padding: 10px;
-}
-
-/* Input Area Fixed Bottom */
+/* Input Bar Fix */
 .stChatInputContainer {
-    padding: 1.5rem 0 !important;
-    background: var(--bg-deep) !important;
+    background-color: var(--bg-color) !important;
+    border-top: 1px solid var(--border-color) !important;
+    padding-bottom: 30px !important;
 }
 
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Hide Streamlit Header/Footer */
+header, footer { visibility: hidden; }
 </style>
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────
-# BACKEND INTEGRATION (REAL SQL PLACEHOLDERS)
+# REAL SQL INTEGRATION BLUEPRINT
 # ─────────────────────────────────────────────────────────────
-def fetch_history_from_db():
-    # query = "SELECT title, risk_score FROM contract_sessions ORDER BY created_at DESC LIMIT 5"
-    # return pd.read_sql(query, db_connection)
-    return [{"name": "Master Services v2", "score": "84%"}, {"name": "NDA Template", "score": "12%"}]
+def fetch_conversations():
+    # Replace with: pd.read_sql("SELECT session_id, title FROM chats", engine)
+    return [{"id": "1", "title": "MSA Risk Analysis"}, {"id": "2", "title": "Vendor Indemnity Audit"}]
 
-def log_message_to_db(role, content):
-    # session_id = st.session_state.session_id
-    # execute("INSERT INTO logs (session_id, role, content) VALUES (%s, %s, %s)", ...)
+def commit_to_sql(session_id, role, content):
+    # execute("INSERT INTO chat_log (session_id, role, content) VALUES (%s, %s, %s)", (session_id, role, content))
     pass
 
 # ─────────────────────────────────────────────────────────────
-# UI ARCHITECTURE
+# SIDEBAR
 # ─────────────────────────────────────────────────────────────
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-# Using columns for the industry "HUD" look
-col_hud, col_terminal = st.columns([1, 1.8], gap="large")
-
-with col_hud:
-    st.markdown('<div class="hud-panel">', unsafe_allow_html=True)
-    st.markdown('<div class="meta-label">CORE SYSTEMS ACTIVE</div>', unsafe_allow_html=True)
-    st.markdown("<h2 style='margin-top:0; font-weight:700; color:#fff;'>ClauseBreaker</h2>", unsafe_allow_html=True)
+with st.sidebar:
+    st.markdown("<h2 style='font-weight:600; letter-spacing:-1px;'>LexAI</h2>", unsafe_allow_html=True)
     
-    st.markdown("<div style='height:40px;'></div>", unsafe_allow_html=True)
+    if st.button("＋ New Chat", use_container_width=True):
+        st.session_state.chat_history = []
+        st.session_state.active_file = None
+        st.rerun()
     
-    # File Management
-    st.markdown('<div class="meta-label">DOCUMENT FEED</div>', unsafe_allow_html=True)
-    uploaded_file = st.file_uploader("Contract Upload", type=["pdf", "docx"], label_visibility="collapsed")
+    st.markdown("<div style='height:30px'></div>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:10px; color:#555; font-weight:700; letter-spacing:1px;'>CONVERSATIONS</p>", unsafe_allow_html=True)
     
-    if uploaded_file:
-        st.info(f"Loaded: {uploaded_file.name}")
-        # Logic here: OCR/Extract text and store in session state
-    
-    st.markdown("<div style='height:30px;'></div>", unsafe_allow_html=True)
-
-    # Real-time Metrics
-    st.markdown('<div class="meta-label">AUDIT SCORE</div>', unsafe_allow_html=True)
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown('<div class="risk-gauge">84%</div>', unsafe_allow_html=True)
-        st.caption("Risk Probability")
-    with c2:
-        st.markdown('<div class="risk-gauge">12</div>', unsafe_allow_html=True)
-        st.caption("Active Flags")
-
-    st.markdown("<div style='height:60px;'></div>", unsafe_allow_html=True)
-
-    # Database History
-    st.markdown('<div class="meta-label">PREVIOUS AUDITS</div>', unsafe_allow_html=True)
-    history = fetch_history_from_db()
+    # Real DB Fetch
+    history = fetch_conversations()
     for item in history:
-        st.markdown(f"""
-            <div style="background:rgba(255,255,255,0.02); padding:10px 15px; border-radius:8px; border:1px solid var(--border); margin-bottom:8px; font-size:12px;">
-                <span style="color:var(--accent); font-family:JetBrains Mono;">{item['score']}</span> 
-                <span style="margin-left:10px; color:#A1A1AA;">{item['name']}</span>
-            </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f'<div class="history-pill">📄 {item["title"]}</div>', unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────
+# MAIN CHAT TERMINAL
+# ─────────────────────────────────────────────────────────────
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())
+
+st.markdown('<div class="chat-wrapper">', unsafe_allow_html=True)
+
+# 1. Empty State (Logo + Uploader)
+if not st.session_state.chat_history:
+    st.markdown("""
+        <div style="text-align: center; margin-top: 15vh; margin-bottom: 40px;">
+            <h1 style="font-size: 42px; font-weight: 600; color: white;">How can I help you today?</h1>
+            <p style="color: #71717A; font-size: 18px;">Upload a contract or ask a legal question to begin.</p>
+        </div>
+    """, unsafe_allow_html=True)
     
-    st.markdown('</div>', unsafe_allow_html=True)
-
-with col_terminal:
-    st.markdown('<div class="meta-label">AI COMMAND TERMINAL</div>', unsafe_allow_html=True)
-    
-    # Chat Height-Adjusted Container
-    terminal_container = st.container(height=620, border=False)
-
-    with terminal_container:
-        if not st.session_state.messages:
-            st.markdown("""
-                <div style="text-align:center; padding-top:150px; opacity:0.1;">
-                    <h1 style="font-size:80px;">⚖️</h1>
-                    <p>Terminal Ready for Document Stream</p>
-                </div>
-            """, unsafe_allow_html=True)
-        
-        for m in st.session_state.messages:
-            if m["role"] == "user":
-                st.markdown(f'<div class="chat-user-row">{m["content"]}</div>', unsafe_allow_html=True)
-            else:
-                st.markdown(f"""
-                    <div class="chat-ai-row">
-                        <div class="meta-label">ANALYSIS OUTPUT</div>
-                        {m["content"]}
-                    </div>
-                """, unsafe_allow_html=True)
-
-    # Persistent Input Bar
-    if prompt := st.chat_input("Enter legal query or scan command..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        log_message_to_db("user", prompt)
-        
-        with st.spinner("Executing Inference..."):
-            time.sleep(1.2)
-            # This is where your actual ML call goes
-            response = """
-The **Indemnification** section (Clause 4.2) is critically unbalanced. 
-
-- **Issue:** One-sided defense obligation for third-party claims.
-- **Precedent:** Typical MSA standards require mutual carve-outs.
-- **Action:** Request a liability cap equivalent to 12 months of service fees.
-"""
-            st.session_state.messages.append({"role": "assistant", "content": response})
-            log_message_to_db("assistant", response)
+    # Elegant Integrated Uploader
+    up_col, _ = st.columns([1, 0.01]) # Just for centering
+    with up_col:
+        uploaded_file = st.file_uploader("Upload", type=['pdf', 'docx'], label_visibility="collapsed")
+        if uploaded_file:
+            st.session_state.active_file = uploaded_file.name
+            with st.status("Analyzing document structure..."):
+                time.sleep(1.2)
+                st.session_state.chat_history.append({"role": "user", "content": f"Analyze {uploaded_file.name}", "file": uploaded_file.name})
+                st.session_state.chat_history.append({
+                    "role": "ai", 
+                    "content": f"I've completed the neural audit of **{uploaded_file.name}**. I found **2 high-risk factors** in the Indemnification clause (Section 8.2). Would you like a breakdown?",
+                    "type": "report"
+                })
+                commit_to_sql(st.session_state.session_id, "ai", "Analysis complete...")
             st.rerun()
+
+# 2. Chat Feed
+for msg in st.session_state.chat_history:
+    if msg["role"] == "user":
+        # Show file chip if it was a file upload message
+        file_html = f'<div class="file-chip">📎 {msg["file"]}</div>' if "file" in msg else ""
+        st.markdown(f'<div class="user-bubble">{file_html}{msg["content"]}</div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="ai-bubble">', unsafe_allow_html=True)
+        st.markdown('<p style="font-family:JetBrains Mono; font-size:10px; color:#555; margin-bottom:12px;">LEXAI CORE v.1.0</p>', unsafe_allow_html=True)
+        st.markdown(msg["content"])
+        st.markdown('</div>', unsafe_allow_html=True)
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+# 3. Persistent Input Bar
+if prompt := st.chat_input("Ask about specific clauses or request a rewrite..."):
+    st.session_state.chat_history.append({"role": "user", "content": prompt})
+    commit_to_sql(st.session_state.session_id, "user", prompt)
+    
+    with st.spinner("Processing..."):
+        time.sleep(1)
+        response = "I've reviewed Clause 4. Under most jurisdictions, this 'Best Efforts' standard is interpreted as a high bar. I recommend changing it to 'Reasonable Commercial Efforts' to reduce your liability."
+        st.session_state.chat_history.append({"role": "ai", "content": response})
+        commit_to_sql(st.session_state.session_id, "ai", response)
+    st.rerun()
