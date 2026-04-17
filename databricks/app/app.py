@@ -2,143 +2,168 @@ import streamlit as st
 import uuid
 import time
 import pandas as pd
-# from databricks import sql # To connect to your SQL Warehouse
+# from databricks import sql # Production Connector
 
 # ─── PAGE CONFIG ─────────────────────────────────────────────────────────────
-st.set_page_config(page_title="LexAI HUD", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(
+    page_title="LexAI Terminal",
+    page_icon="⚖️",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# ─── HIGH-DENSITY CSS (HUD THEME) ─────────────────────────────────────────────
+# ─── SOBER MINIMALIST DESIGN SYSTEM ──────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono&family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Source+Code+Pro&display=swap');
 
+/* Main Colors */
 :root {
-    --bg: #080808;
-    --sidebar: #030303;
-    --accent: #d4af6a;
-    --border: rgba(255,255,255,0.05);
+    --bg-main: #0E0E10;
+    --sidebar-bg: #050505;
+    --text-primary: #E4E4E7;
+    --text-muted: #71717A;
+    --border: rgba(255, 255, 255, 0.1);
+    --accent: #D4AF6A;
 }
 
-.stApp { background-color: var(--bg); color: #d1d1d6; font-family: 'Inter', sans-serif; }
-header, footer { visibility: hidden; }
+.stApp {
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+}
 
-/* Sidebar Density */
+/* Sidebar - Clean Slate */
 [data-testid="stSidebar"] {
-    background-color: var(--sidebar) !important;
+    background-color: var(--sidebar-bg) !important;
     border-right: 1px solid var(--border);
 }
 
-/* Chat Density */
+/* Chat Layout - GPT Centered Flow */
 .chat-container {
-    max-width: 1000px;
+    max-width: 850px;
     margin: 0 auto;
+    padding-bottom: 150px;
 }
 
-.ai-row {
+.ai-message {
+    padding: 24px 0;
     border-bottom: 1px solid var(--border);
-    padding: 1.5rem 0;
-    font-size: 14px;
-    line-height: 1.5;
+    line-height: 1.6;
+    font-size: 15px;
 }
 
 .user-row {
     display: flex;
     justify-content: flex-end;
-    margin: 1.5rem 0;
+    margin: 24px 0;
 }
 
 .user-bubble {
-    background: #1a1a1c;
-    border: 1px solid var(--border);
-    padding: 10px 16px;
-    border-radius: 12px 12px 2px 12px;
-    font-size: 14px;
+    background: #27272A;
+    padding: 12px 20px;
+    border-radius: 18px 18px 2px 18px;
+    font-size: 15px;
     max-width: 80%;
+    color: white;
 }
 
-/* Metadata Labels */
-.meta {
-    font-family: 'JetBrains Mono';
-    font-size: 9px;
-    color: #444;
-    letter-spacing: 1px;
-    margin-bottom: 8px;
-}
-
-/* Sidebar History Items */
+/* History Items */
 .history-item {
-    font-size: 12px;
-    padding: 6px 10px;
-    color: #888;
-    border-radius: 4px;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: var(--text-muted);
+    border-radius: 6px;
     cursor: pointer;
+    transition: 0.2s;
 }
-.history-item:hover { background: #111; color: var(--accent); }
+.history-item:hover {
+    background: #18181B;
+    color: white;
+}
 
-/* Compact Input */
-.stChatInputContainer { padding: 1rem 0 !important; background: var(--bg) !important; }
+/* Fix Streamlit Header & Inputs */
+header, footer { visibility: hidden; }
+.stChatInputContainer {
+    background-color: var(--bg-main) !important;
+    padding-bottom: 30px !important;
+}
+
+/* Clean Labels */
+.label-sm {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
 </style>
 """, unsafe_allow_html=True)
 
-# ─── DATABRICKS SQL LOGIC ────────────────────────────────────────────────────
-# Replace with your actual Databricks Workspace details
-def get_sql_history():
+# ─── DATABRICKS SQL INTEGRATION ──────────────────────────────────────────────
+def fetch_history_from_databricks():
     """
-    SQL: SELECT session_id, title FROM bronze.lex_chat_history 
-    ORDER BY created_at DESC
+    SQL Call to Databricks SQL Warehouse.
+    SELECT session_id, title FROM gold.lex_chat_history ORDER BY created_at DESC
     """
-    # dummy for UI render
-    return [{"id": "a", "title": "Service_Agreement_v4.pdf"}, {"id": "b", "title": "NDA_Clause_Audit"}]
+    # Placeholder for the UI loop
+    return [{"id": "1", "title": "MSA_Agreement_V4"}, {"id": "2", "title": "Indemnity_Rewrite"}]
 
-def save_to_databricks(session_id, role, content):
+def save_message_to_databricks(session_id, role, content):
     """
-    SQL: INSERT INTO gold.lex_chat_logs (session_id, role, content, ts) 
-    VALUES ('{}', '{}', '{}', CURRENT_TIMESTAMP)
+    INSERT INTO gold.lex_chat_history (session_id, role, content, created_at)
+    VALUES ('{}', '{}', '{}', CURRENT_TIMESTAMP())
     """
     pass
 
 # ─── SIDEBAR HUD ─────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("<h3 style='font-family:JetBrains Mono; color:white;'>LEX-HUD</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='font-weight:600; padding-bottom: 10px;'>LexAI</h3>", unsafe_allow_html=True)
     
-    if st.button("＋ INIT_NEW_SESSION", use_container_width=True):
+    if st.button("＋ New Chat", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
 
     st.markdown("---")
     
-    # PERMANENT COMPACT UPLOADER
-    st.markdown("<div class='meta'>FILE_INPUT_STREAM</div>", unsafe_allow_html=True)
+    # PERMANENT MINIMAL UPLOADER
+    st.markdown('<div class="label-sm">Document Input</div>', unsafe_allow_html=True)
     up = st.file_uploader("Upload", type=['pdf', 'docx'], label_visibility="collapsed")
-    if up: st.caption(f"SYNCED: {up.name}")
+    if up: st.caption(f"✓ {up.name}")
 
-    st.markdown("<br><div class='meta'>DATABASE_ARCHIVE</div>", unsafe_allow_html=True)
-    history = get_sql_history()
-    for item in history:
-        st.markdown(f"<div class='history-item'>📄 {item['title']}</div>", unsafe_allow_html=True)
+    st.markdown("<div style='height:40px;'></div>", unsafe_allow_html=True)
+    
+    # HISTORY FROM SQL
+    st.markdown('<div class="label-sm">History</div>', unsafe_allow_html=True)
+    history = fetch_history_from_databricks()
+    for chat in history:
+        st.markdown(f'<div class="history-item">📄 {chat["title"]}</div>', unsafe_allow_html=True)
 
-# ─── MAIN TERMINAL ───────────────────────────────────────────────────────────
+# ─── MAIN CONVERSATION ───────────────────────────────────────────────────────
 if "messages" not in st.session_state: st.session_state.messages = []
 if "sid" not in st.session_state: st.session_state.sid = str(uuid.uuid4())
 
 st.markdown('<div class="chat-container">', unsafe_allow_html=True)
 
+# Render Messages
 for m in st.session_state.messages:
     if m["role"] == "user":
         st.markdown(f'<div class="user-row"><div class="user-bubble">{m["content"]}</div></div>', unsafe_allow_html=True)
     else:
-        st.markdown(f'<div class="ai-row"><div class="meta">SYSTEM_OUTPUT // NEURAL_AUDIT</div>{m["content"]}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="ai-message"><b>LexAI</b><br><br>{m["content"]}</div>', unsafe_allow_html=True)
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# ─── COMMAND INPUT ───────────────────────────────────────────────────────────
-if prompt := st.chat_input("Enter command..."):
+# ─── INPUT LOGIC ─────────────────────────────────────────────────────────────
+if prompt := st.chat_input("Ask about the contract..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
-    save_to_databricks(st.session_state.sid, "user", prompt) # REAL SQL CALL
+    save_message_to_databricks(st.session_state.sid, "user", prompt)
     
-    with st.spinner("Processing..."):
-        time.sleep(0.5)
-        response = "Audit complete. **Section 4.1 (Liability)** detected as High Risk. No mutual carve-out found."
+    with st.spinner("Analyzing..."):
+        time.sleep(0.8) # Real ML model inference happens here
+        response = "I've reviewed the **Liability** section. It currently lacks a cap for indirect damages. Recommendation: Add a cap equal to 100% of the contract value."
         st.session_state.messages.append({"role": "assistant", "content": response})
-        save_to_databricks(st.session_state.sid, "assistant", response) # REAL SQL CALL
+        save_message_to_databricks(st.session_state.sid, "assistant", response)
+        
     st.rerun()
