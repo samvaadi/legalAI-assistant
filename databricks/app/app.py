@@ -4,6 +4,13 @@ import time
 import pandas as pd
 from databricks import sql
 
+# 🔥 ADD THESE IMPORTS
+from databricks_langchain import ChatDatabricks
+import torch
+from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+from IndicTransToolkit import IndicProcessor
+
+
 # ─────────────────────────────────────────────────────────────
 # CONFIG
 # ─────────────────────────────────────────────────────────────
@@ -13,7 +20,18 @@ st.set_page_config(
     layout="wide"
 )
 
-TABLE_NAME = "default.chat_logs"  # ✅ use default schema
+TABLE_NAME = "default.chat_logs"
+
+# ─────────────────────────────────────────────────────────────
+# 🔥 LOAD MODELS (ONLY ONCE)
+# ─────────────────────────────────────────────────────────────
+llm = ChatDatabricks(endpoint="databricks-meta-llama-3-3-70b-instruct")
+
+model_name = "ai4bharat/indictrans2-en-indic-dist-200M"
+tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+model = AutoModelForSeq2SeqLM.from_pretrained(model_name, trust_remote_code=True)
+ip = IndicProcessor(inference=True)
+
 
 # ─────────────────────────────────────────────────────────────
 # UI STYLING
@@ -56,6 +74,7 @@ header, footer { visibility: hidden; }
 </style>
 """, unsafe_allow_html=True)
 
+
 # ─────────────────────────────────────────────────────────────
 # DB CONNECTION
 # ─────────────────────────────────────────────────────────────
@@ -66,9 +85,7 @@ def get_db_conn():
         access_token=st.secrets["DB_TOKEN"]
     )
 
-# ─────────────────────────────────────────────────────────────
-# DB FUNCTIONS
-# ─────────────────────────────────────────────────────────────
+
 def save_to_db(sid, title, role, content):
     try:
         with get_db_conn() as conn:
@@ -111,6 +128,62 @@ def fetch_session_messages(sid):
     except Exception:
         return []
 
+
+# ─────────────────────────────────────────────────────────────
+# 🔥 LLM FUNCTIONS
+# ─────────────────────────────────────────────────────────────
+def translate_to_hindi(text):
+    src_lang, tgt_lang = "eng_Latn", "hin_Deva"
+
+    batch = ip.preprocess_batch([text], src_lang=src_lang, tgt_lang=tgt_lang)
+
+    inputs = tokenizer(
+        batch,
+        truncation=True,
+        padding="longest",
+        return_tensors="pt"
+    )
+
+    with torch.no_grad():
+        generated_tokens = model.generate(
+            **inputs,
+            num_beams=5,
+            max_length=256
+        )
+
+    translations = tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
+    return ip.postprocess_batch(translations, lang=tgt_lang)[0]
+
+
+def call_llm(prompt):
+    full_prompt = f"""
+You are a legal AI assistant for Indian law (BNS).
+
+User Query:
+{prompt}
+
+Give:
+- Explanation
+- Risks
+- Fix suggestions
+"""
+
+    response = llm.invoke(full_prompt)
+    english = response.content
+
+    hindi = translate_to_hindi(english)
+
+    return f"""
+### 🇬🇧 English:
+{english}
+
+---
+
+### 🇮🇳 Hindi:
+{hindi}
+"""
+
+
 # ─────────────────────────────────────────────────────────────
 # SESSION STATE
 # ─────────────────────────────────────────────────────────────
@@ -122,6 +195,7 @@ if "sid" not in st.session_state:
 
 if "chat_title" not in st.session_state:
     st.session_state.chat_title = "New Chat"
+
 
 # ─────────────────────────────────────────────────────────────
 # SIDEBAR
@@ -150,6 +224,7 @@ with st.sidebar:
                 st.session_state.chat_title = row["title"]
                 st.rerun()
 
+
 # ─────────────────────────────────────────────────────────────
 # CHAT UI
 # ─────────────────────────────────────────────────────────────
@@ -172,6 +247,7 @@ for m in st.session_state.messages:
 
 st.markdown('</div>', unsafe_allow_html=True)
 
+
 # ─────────────────────────────────────────────────────────────
 # INPUT
 # ─────────────────────────────────────────────────────────────
@@ -180,24 +256,11 @@ if prompt := st.chat_input("Ask about your contract..."):
     if not st.session_state.messages:
         st.session_state.chat_title = prompt[:40]
 
-    # Save user message
     st.session_state.messages.append({"role": "user", "content": prompt})
     save_to_db(st.session_state.sid, st.session_state.chat_title, "user", prompt)
 
-    # Fake AI response (replace later with real model)
     with st.spinner("Analyzing contract..."):
-        time.sleep(1)
-
-        response = """
-### ⚠️ Risk Found: Indemnity Clause
-
-The indemnity clause is **non-mutual**, exposing one party disproportionately.
-
-**Fix Suggestions:**
-- Make indemnity mutual  
-- Add liability cap  
-- Define trigger conditions  
-"""
+        response = call_llm(prompt)   # 🔥 REAL AI HERE
 
     st.session_state.messages.append({"role": "assistant", "content": response})
     save_to_db(st.session_state.sid, st.session_state.chat_title, "assistant", response)
