@@ -1,246 +1,229 @@
 import streamlit as st
-import base64
 import time
+import uuid
 from datetime import datetime
 
 # ─── PAGE CONFIG ─────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="LexAI | Legal Assistant",
+    page_title="LexAI | Legal Intel",
     page_icon="⚖️",
     layout="wide",
-    initial_sidebar_state="expanded",
 )
 
-# ─── CLAUDE-INSPIRED "SOBER" DESIGN SYSTEM ────────────────────────────────────
+# ─── THE "CLAUDE SOBER" DESIGN SYSTEM ────────────────────────────────────────
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap');
 
-    /* Color Palette & Base */
     :root {
         --bg-color: #F9F8F6;
-        --sidebar-color: #F0EEE9;
-        --text-main: #2D2D2D;
+        --sidebar-color: #F3F2EE;
+        --text-main: #1A1A1A;
         --text-muted: #656565;
-        --border-color: #E2E0D7;
-        --accent-color: #D97757; /* Subtle burnt orange for actions */
-        --card-bg: #FFFFFF;
+        --border-color: #E5E3DA;
+        --accent: #D97757;
     }
 
-    .stApp {
-        background-color: var(--bg-color);
-        color: var(--text-main);
-        font-family: 'Inter', sans-serif;
-    }
-
-    /* Hide Streamlit Decor */
+    .stApp { background-color: var(--bg-color); color: var(--text-main); font-family: 'Inter', sans-serif; }
     #MainMenu, footer, header { visibility: hidden; }
-    .block-container { padding: 0 !important; }
 
-    /* Sidebar - History */
+    /* Sidebar - Navigation & History */
     [data-testid="stSidebar"] {
         background-color: var(--sidebar-color) !important;
         border-right: 1px solid var(--border-color);
+        padding: 20px 10px;
     }
-    
-    .sidebar-item {
-        padding: 10px 12px;
-        border-radius: 6px;
-        margin-bottom: 4px;
-        font-size: 13px;
+
+    /* Conversation History Items */
+    .history-item {
+        padding: 10px 14px;
+        border-radius: 8px;
+        margin-bottom: 5px;
+        font-size: 13.5px;
         color: var(--text-main);
         cursor: pointer;
-        transition: background 0.2s;
-    }
-    .sidebar-item:hover { background: rgba(0,0,0,0.05); }
-
-    /* Main Chat Layout */
-    .chat-container {
-        max-width: 850px;
-        margin: 0 auto;
-        padding: 40px 20px;
+        transition: all 0.2s;
+        border: 1px solid transparent;
         display: flex;
-        flex-direction: column;
-        gap: 24px;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .history-item:hover {
+        background: #EAE8E0;
+        border-color: var(--border-color);
+    }
+    .history-item.active {
+        background: #EAE8E0;
+        font-weight: 500;
+        border-color: var(--border-color);
     }
 
-    /* Message Styling */
-    .user-bubble {
-        align-self: flex-end;
-        background: #ECE9E1;
-        padding: 14px 20px;
-        border-radius: 20px 20px 4px 20px;
-        max-width: 80%;
-        font-size: 15px;
-        line-height: 1.5;
+    /* Main Chat Area */
+    .main-chat-container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding-bottom: 150px;
     }
 
-    .ai-bubble {
-        align-self: flex-start;
-        background: transparent;
-        padding: 0;
-        max-width: 100%;
-        font-size: 15px;
+    /* Chat Bubbles */
+    .ai-message {
+        font-size: 16px;
         line-height: 1.6;
+        margin-bottom: 40px;
+        padding-bottom: 20px;
         border-bottom: 1px solid var(--border-color);
-        padding-bottom: 30px;
-        margin-bottom: 10px;
     }
-
-    /* Analysis Cards inside Chat */
-    .analysis-card {
-        background: var(--card-bg);
-        border: 1px solid var(--border-color);
-        border-radius: 12px;
-        padding: 20px;
-        margin-top: 15px;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.02);
-    }
-
-    .risk-indicator {
+    .user-message {
+        background: #F0EDE4;
+        padding: 12px 20px;
+        border-radius: 15px;
         display: inline-block;
-        padding: 2px 8px;
-        border-radius: 4px;
-        font-size: 11px;
-        font-weight: 600;
-        text-transform: uppercase;
-        margin-bottom: 8px;
+        margin-bottom: 30px;
+        align-self: flex-end;
+        max-width: 85%;
+        font-size: 15px;
     }
 
-    /* Input System */
-    .stChatInputContainer {
-        padding: 20px !important;
-        background: var(--bg-color) !important;
-    }
-    
-    .input-wrapper {
-        position: fixed;
-        bottom: 0;
-        width: calc(100% - 300px); /* Sidebar width offset */
-        background: var(--bg-color);
-        padding: 20px 0;
-        border-top: 1px solid var(--border-color);
+    /* File Chip */
+    .file-chip {
+        display: inline-flex;
+        align-items: center;
+        background: white;
+        border: 1px solid var(--border-color);
+        padding: 8px 15px;
+        border-radius: 10px;
+        margin-bottom: 15px;
+        font-size: 13px;
     }
 
-    /* Buttons & File Upload */
+    /* Buttons */
     .stButton>button {
-        background-color: var(--card-bg) !important;
+        border-radius: 8px !important;
+        background: white !important;
         border: 1px solid var(--border-color) !important;
         color: var(--text-main) !important;
-        border-radius: 8px !important;
-    }
-    
-    /* Elegant Title */
-    .lex-title {
-        font-family: 'Source Serif 4', serif;
-        font-weight: 600;
-        font-size: 24px;
-        color: #1a1a1a;
+        font-weight: 500 !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# ─── SESSION STATE ─────────────────────────────────────────────────────────────
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-if "uploaded_file_name" not in st.session_state:
-    st.session_state.uploaded_file_name = None
+# ─── DATABASE LAYER (MOCK) ───────────────────────────────────────────────────
+# In a real app, replace these with: 
+# conn = sqlite3.connect('lex.db') or your SQL Alchemy logic
+def fetch_conversations():
+    """Fetch all chat sessions from DB"""
+    if "db_mock" not in st.session_state:
+        st.session_state.db_mock = [
+            {"id": "1", "title": "Service Agreement Analysis", "timestamp": "2026-04-15"},
+            {"id": "2", "title": "NDA Review", "timestamp": "2026-04-16"}
+        ]
+    return st.session_state.db_mock
 
-# ─── SIDEBAR ──────────────────────────────────────────────────────────────────
+def save_new_conversation(title):
+    """Save a new chat session to DB"""
+    new_id = str(uuid.uuid4())
+    new_entry = {
+        "id": new_id,
+        "title": title[:30] + "...",
+        "timestamp": datetime.now().strftime("%Y-%m-%d")
+    }
+    st.session_state.db_mock.insert(0, new_entry)
+    return new_id
+
+# ─── SESSION STATE MANAGEMENT ───────────────────────────────────────────────
+if "current_chat_id" not in st.session_state:
+    st.session_state.current_chat_id = None
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+if "uploaded_filename" not in st.session_state:
+    st.session_state.uploaded_filename = None
+
+# ─── SIDEBAR: DB FETCH & NEW CHAT ────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("<div style='padding: 20px;'><h1 class='lex-title'>LexAI</h1></div>", unsafe_allow_html=True)
+    st.markdown("<h2 style='font-family:Source Serif 4; margin-bottom:20px;'>LexAI</h2>", unsafe_allow_html=True)
     
     if st.button("＋ New Chat", use_container_width=True):
-        st.session_state.messages = []
-        st.session_state.uploaded_file_name = None
+        st.session_state.current_chat_id = None
+        st.session_state.chat_history = []
+        st.session_state.uploaded_filename = None
         st.rerun()
-        
-    st.markdown("<br><div style='padding: 0 20px; font-size: 11px; font-weight: 600; color: #999; text-transform: uppercase;'>Recent History</div>", unsafe_allow_html=True)
-    history = ["Employment_Agreement.pdf", "Rental_Lease_Draft.docx", "Privacy_Policy_v2.pdf"]
-    for item in history:
-        st.markdown(f"<div class='sidebar-item'>📄 {item}</div>", unsafe_allow_html=True)
 
-# ─── MAIN CHAT INTERFACE ─────────────────────────────────────────────────────
-# We wrap everything in a centered div for that Claude feel
-st.markdown('<div class="chat-container">', unsafe_allow_html=True)
+    st.markdown("<br><div style='font-size: 11px; font-weight: 600; color: #888; letter-spacing: 0.5px; margin-bottom: 10px;'>CONVERSATIONS</div>", unsafe_allow_html=True)
+    
+    # Fetch from DB
+    conversations = fetch_conversations()
+    for conv in conversations:
+        is_active = "active" if st.session_state.current_chat_id == conv['id'] else ""
+        st.markdown(f"""
+            <div class="history-item {is_active}">
+                <span>📄 {conv['title']}</span>
+            </div>
+        """, unsafe_allow_html=True)
 
-# Welcome State
-if not st.session_state.messages:
+# ─── MAIN CONTENT ─────────────────────────────────────────────────────────────
+st.markdown('<div class="main-chat-container">', unsafe_allow_html=True)
+
+# 1. Start State: Logo and File Upload
+if not st.session_state.chat_history:
     st.markdown("""
-        <div style="text-align: center; margin-top: 10vh;">
-            <h2 style="font-family: 'Source Serif 4', serif; font-size: 32px;">How can I help with your contract?</h2>
-            <p style="color: var(--text-muted); font-size: 16px;">Upload a document or ask a legal question to begin analysis.</p>
+        <div style="text-align: center; margin-top: 15vh; margin-bottom: 40px;">
+            <h1 style="font-family: Source Serif 4; font-size: 36px; margin-bottom: 10px;">How can I assist you?</h1>
+            <p style="color: #666; font-size: 17px;">Upload a legal document to begin a risk audit.</p>
         </div>
     """, unsafe_allow_html=True)
     
-    # Elegant File Uploader as a "first message"
-    uploaded_file = st.file_uploader("Upload contract", type=['pdf', 'docx'], label_visibility="collapsed")
-    if uploaded_file:
-        st.session_state.uploaded_file_name = uploaded_file.name
-        with st.spinner("Analyzing document structure..."):
+    # The centered upload box
+    up_file = st.file_uploader("Upload", type=['pdf', 'docx'], label_visibility="collapsed")
+    if up_file:
+        st.session_state.uploaded_filename = up_file.name
+        # Simulate Analysis
+        with st.spinner("Analyzing document..."):
             time.sleep(1.5)
-            st.session_state.messages.append({"role": "user", "content": f"Uploaded: {uploaded_file.name}"})
-            st.session_state.messages.append({
-                "role": "assistant", 
-                "content": "Analysis complete. I've identified **12 clauses** with **3 high-risk areas** regarding Indemnification and Liability.",
-                "type": "analysis"
-            })
+            # DATABASE ACTION: Create new record on first interaction
+            chat_id = save_new_conversation(f"Analysis: {up_file.name}")
+            st.session_state.current_chat_id = chat_id
+            
+            st.session_state.chat_history.append({"role": "user", "content": f"Analyze {up_file.name}"})
+            st.session_state.chat_history.append({"role": "ai", "content": "I've processed the document. I found **4 critical issues** in the Indemnity section. Would you like me to summarize the risks or draft a counter-clause?"})
             st.rerun()
 
-# Message Display Loop
-for msg in st.session_state.messages:
-    if msg["role"] == "user":
-        st.markdown(f'<div class="user-bubble">{msg["content"]}</div>', unsafe_allow_html=True)
+# 2. Chat History Display
+for chat in st.session_state.chat_history:
+    if chat["role"] == "user":
+        st.markdown(f'<div style="text-align: right;"><div class="user-message">{chat["content"]}</div></div>', unsafe_allow_html=True)
     else:
-        # AI Response
-        st.markdown('<div class="ai-bubble">', unsafe_allow_html=True)
-        st.markdown(f'<div style="font-weight: 600; margin-bottom: 8px;">LexAI</div>', unsafe_allow_html=True)
-        st.write(msg["content"])
-        
-        # If the message has an "analysis" type, show the Claude-style cards
-        if msg.get("type") == "analysis":
-            st.markdown(f"""
-                <div class="analysis-card">
-                    <span class="risk-indicator" style="background: #FEE2E2; color: #991B1B;">High Risk</span>
-                    <div style="font-weight: 600; font-size: 16px;">Limitation of Liability</div>
-                    <div style="color: var(--text-muted); font-size: 14px; margin-top: 4px;">
-                        The current draft caps all damages at $500, which is significantly below the contract value. 
-                        Recommend increasing this to 100% of fees paid.
-                    </div>
-                </div>
-                <div class="analysis-card">
-                    <span class="risk-indicator" style="background: #FEF3C7; color: #92400E;">Medium Risk</span>
-                    <div style="font-weight: 600; font-size: 16px;">Termination for Convenience</div>
-                    <div style="color: var(--text-muted); font-size: 14px; margin-top: 4px;">
-                        30-day notice period is standard, but no "kill-fee" is specified for work-in-progress.
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-st.markdown('</div>', unsafe_allow_html=True) # End chat-container
-
-# ─── INPUT SYSTEM ─────────────────────────────────────────────────────────────
-# We use the built-in chat_input but it is styled via CSS to stick to the bottom
-if prompt := st.chat_input("Ask a follow-up or request a rewrite..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    
-    # Mock AI logic
-    if "rewrite" in prompt.lower():
-        response = "Here is a suggested rewrite for the **Indemnification** clause that adds mutual protection:\n\n`Each party shall indemnify and hold harmless the other party from and against any third-party claims arising from gross negligence...`"
-    else:
-        response = "I've reviewed the section you mentioned. While it seems standard, the jurisdiction in New York might affect how the 'Force Majeure' clause is interpreted."
-        
-    st.session_state.messages.append({"role": "assistant", "content": response})
-    st.rerun()
-
-# ─── FLOATING UPLOAD (When already in chat) ──────────────────────────────────
-if st.session_state.uploaded_file_name:
-    with st.sidebar:
-        st.markdown("---")
         st.markdown(f"""
-            <div style='background: white; border: 1px solid var(--border-color); padding: 12px; border-radius: 8px;'>
-                <div style='font-size: 10px; color: var(--text-muted);'>ACTIVE FILE</div>
-                <div style='font-size: 13px; font-weight: 500;'>{st.session_state.uploaded_file_name}</div>
+            <div class="ai-message">
+                <div style="font-weight: 600; font-size: 13px; color: #888; margin-bottom: 10px; letter-spacing: 0.5px;">LEXAI ASSISTANT</div>
+                {chat["content"]}
             </div>
         """, unsafe_allow_html=True)
+
+st.markdown('</div>', unsafe_allow_html=True) # End Container
+
+# 3. Persistent Input Bar
+if prompt := st.chat_input("Ask about specific clauses or request a rewrite..."):
+    # If it's a fresh chat without a file, create DB entry on first text
+    if st.session_state.current_chat_id is None:
+        chat_id = save_new_conversation(prompt)
+        st.session_state.current_chat_id = chat_id
+        
+    st.session_state.chat_history.append({"role": "user", "content": prompt})
+    
+    # Simulated response
+    with st.spinner("Thinking..."):
+        time.sleep(1)
+        response = f"I've analyzed your request regarding '{prompt}'. In legal contexts, this often triggers a 'Best Efforts' requirement. I recommend specifying a 'Reasonable Efforts' standard instead to lower your liability."
+        st.session_state.chat_history.append({"role": "ai", "content": response})
+    
+    st.rerun()
+
+# ─── FOOTER STATUS ────────────────────────────────────────────────────────────
+if st.session_state.uploaded_filename:
+    st.sidebar.markdown("---")
+    st.sidebar.markdown(f"""
+        <div class="file-chip">
+            <span style="margin-right:8px;">📎</span>
+            <span>{st.session_state.uploaded_filename}</span>
+        </div>
+    """, unsafe_allow_html=True)
