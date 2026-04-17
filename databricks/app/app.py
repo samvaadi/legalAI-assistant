@@ -1,216 +1,200 @@
 import streamlit as st
 import time
 import uuid
+import base64
 from datetime import datetime
 
 # ─── PAGE CONFIG ─────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="LexAI | Neural Command",
+    page_title="LEX-COMMAND | Quantum Legal HUD",
     page_icon="⚖️",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# ─── THE "DARK ELEGANCE" DESIGN SYSTEM ───────────────────────────────────────
+# ─── THE "SMTNG CRAZY" DESIGN SYSTEM (HUD ELEGANCE) ──────────────────────────
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
-    /* Global Dark Theme Overrides */
     :root {
-        --bg-main: #0D0D0E;
-        --bg-sidebar: #050505;
-        --bg-card: #161618;
-        --border: rgba(255, 255, 255, 0.08);
-        --text-main: #E4E4E7;
-        --text-muted: #A1A1AA;
+        --bg-deep: #050505;
+        --glass: rgba(20, 20, 25, 0.7);
         --accent: #C8A96E;
+        --accent-glow: rgba(200, 169, 110, 0.2);
+        --border: rgba(255, 255, 255, 0.07);
+        --text-dim: #88888E;
     }
 
+    /* Full App HUD */
     .stApp {
-        background-color: var(--bg-main) !important;
-        color: var(--text-main);
-        font-family: 'Inter', sans-serif;
+        background-color: var(--bg-deep) !important;
+        background-image: radial-gradient(circle at 50% -20%, #1A1A1D 0%, transparent 80%);
+        color: #E4E4E7;
+        font-family: 'Space Grotesk', sans-serif;
     }
 
-    /* Sidebar - Sleek Obsidian */
-    [data-testid="stSidebar"] {
-        background-color: var(--bg-sidebar) !important;
-        border-right: 1px solid var(--border);
-    }
-    
     [data-testid="stHeader"] { background: transparent; }
     #MainMenu, footer { visibility: hidden; }
 
-    /* Centered Chat Column */
-    .chat-container {
-        max-width: 850px;
+    /* Glass Sidebar */
+    [data-testid="stSidebar"] {
+        background-color: #030303 !important;
+        border-right: 1px solid var(--border);
+    }
+
+    /* Persistent Chat Box Layout */
+    .chat-HUD {
+        max-width: 900px;
         margin: 0 auto;
-        padding-top: 2rem;
-        padding-bottom: 10rem;
+        padding-bottom: 150px;
     }
 
-    /* Message Bubbles */
-    .ai-row {
-        margin-bottom: 2.5rem;
-        padding-bottom: 2rem;
-        border-bottom: 1px solid var(--border);
-        animation: fadeIn 0.4s ease-out;
-    }
-    
-    .user-row {
-        display: flex;
-        justify-content: flex-end;
-        margin-bottom: 2rem;
+    /* AI HUD Message */
+    .ai-bubble {
+        border-left: 2px solid var(--accent);
+        background: rgba(255, 255, 255, 0.02);
+        padding: 24px;
+        margin-bottom: 40px;
+        border-radius: 4px 20px 20px 20px;
+        backdrop-filter: blur(10px);
+        animation: slideUp 0.5s ease-out;
     }
 
+    /* User Message */
     .user-bubble {
-        background: #27272A;
-        color: #FFFFFF;
-        padding: 0.8rem 1.2rem;
-        border-radius: 1.2rem 1.2rem 0.2rem 1.2rem;
+        background: var(--accent);
+        color: #000;
+        font-weight: 600;
+        padding: 12px 20px;
+        border-radius: 20px 20px 4px 20px;
         max-width: 80%;
-        font-size: 0.95rem;
-        border: 1px solid var(--border);
+        margin-left: auto;
+        margin-bottom: 24px;
+        box-shadow: 0 10px 30px var(--accent-glow);
     }
 
-    /* Minimalist File Uploader */
-    [data-testid="stFileUploader"] {
-        background-color: var(--bg-card);
-        border: 1px dashed var(--border);
+    /* HUD Metrics */
+    .metric-card {
+        background: rgba(255, 255, 255, 0.01);
+        border: 1px solid var(--border);
+        padding: 15px;
         border-radius: 12px;
-        padding: 2rem;
+        text-align: center;
+        transition: 0.3s;
     }
+    .metric-card:hover { border-color: var(--accent); background: rgba(200, 169, 110, 0.05); }
 
-    /* Analysis Report Card */
-    .report-card {
-        background: var(--bg-card);
-        border: 1px solid var(--border);
+    /* The "Drop Zone" */
+    [data-testid="stFileUploader"] {
+        background-color: var(--glass) !important;
+        border: 1px dashed var(--accent) !important;
         border-radius: 16px;
-        padding: 1.5rem;
-        margin-top: 1rem;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        padding: 30px;
     }
 
-    /* Sidebar Items */
-    .history-card {
-        padding: 0.7rem 1rem;
-        border-radius: 8px;
-        margin-bottom: 0.3rem;
-        font-size: 0.85rem;
-        color: var(--text-muted);
-        transition: all 0.2s;
-        cursor: pointer;
-    }
-    .history-card:hover {
-        background: #1A1A1B;
-        color: white;
-    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-thumb { background: #222; border-radius: 10px; }
 
-    /* Input HUD */
-    .stChatInputContainer {
-        padding: 1.5rem 0 !important;
-        background-color: var(--bg-main) !important;
-    }
-
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 </style>
 """, unsafe_allow_html=True)
 
-# ─── DATABASE MOCK FETCH ─────────────────────────────────────────────────────
-if "db_history" not in st.session_state:
-    st.session_state.db_history = [
-        {"id": "1", "title": "Service Master Audit", "date": "18 Apr"},
-        {"id": "2", "title": "IP Clause Rewrite", "date": "17 Apr"}
+# ─── DATABASE MOCK LAYER (DYNAMIC SYNC) ──────────────────────────────────────
+if "db" not in st.session_state:
+    st.session_state.db = [
+        {"id": "a1", "name": "Employment_Contract_V1.pdf", "score": "88/100"},
+        {"id": "a2", "name": "NDA_Final.docx", "score": "94/100"}
     ]
 
-# ─── SIDEBAR ──────────────────────────────────────────────────────────────────
+# ─── SIDEBAR: PERSISTENT HISTORY ─────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("<h2 style='font-family:Inter; font-weight:700; color:white; margin-bottom:1.5rem;'>LexAI</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='font-weight:700; color:white; letter-spacing:-1px;'>LEX-HUD</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:10px; color:#555; margin-top:-15px;'>QUANTUM-LEGAL INTELLIGENCE</p>", unsafe_allow_html=True)
     
-    if st.button("＋ New Chat", use_container_width=True):
+    if st.button("＋ INITIALIZE NEW SESSION", use_container_width=True):
         st.session_state.chat_history = []
-        st.session_state.active_file = None
         st.rerun()
 
-    st.markdown("<div style='height:2rem'></div>", unsafe_allow_html=True)
-    st.markdown("<p style='font-size:10px; font-weight:700; color:#555; letter-spacing:1px;'>HISTORY</p>", unsafe_allow_html=True)
+    st.markdown("<div style='height:40px'></div>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:10px; font-weight:700; color:#444; letter-spacing:1px;'>HISTORY_LOG</p>", unsafe_allow_html=True)
     
-    for chat in st.session_state.db_history:
+    for entry in st.session_state.db:
         st.markdown(f"""
-            <div class="history-card">
-                <span style="color:#C8A96E; margin-right:8px;">📄</span> {chat['title']}
+            <div style="padding: 12px; border-radius: 8px; border: 1px solid #111; background: #080808; margin-bottom: 8px; cursor: pointer;">
+                <div style="font-size: 12px; color: #eee; font-weight: 500;">📄 {entry['name']}</div>
+                <div style="font-size: 9px; color: #C8A96E; font-family: 'JetBrains Mono';">RISK_SCORE: {entry['score']}</div>
             </div>
         """, unsafe_allow_html=True)
 
-# ─── MAIN CHAT AREA ──────────────────────────────────────────────────────────
+# ─── MAIN APP HUD ────────────────────────────────────────────────────────────
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-st.markdown('<div class="chat-container">', unsafe_allow_html=True)
+st.markdown('<div class="chat-HUD">', unsafe_allow_html=True)
 
-# Start State
+# 1. Start State / Dashboard
 if not st.session_state.chat_history:
     st.markdown("""
         <div style="text-align: center; margin-top: 10vh; margin-bottom: 3rem;">
-            <h1 style="font-size: 2.5rem; font-weight: 600; color: white;">Contract Command.</h1>
-            <p style="color: #71717A; font-size: 1.1rem;">Upload a document to identify risk vectors and legal gaps.</p>
+            <h1 style="font-size: 3.5rem; font-weight: 700; color: white; letter-spacing: -2px;">System Ready.</h1>
+            <p style="color: #666; font-size: 1.1rem; font-family: 'JetBrains Mono';">FEED CONTRACT DATA FOR NEURAL MAPPING</p>
         </div>
     """, unsafe_allow_html=True)
     
+    # HUD Metrics (Faking a live dashboard)
+    c1, c2, c3 = st.columns(3)
+    c1.markdown('<div class="metric-card"><div style="font-size:10px; color:#444;">ENGINE</div><div style="color:#C8A96E; font-weight:600;">ACTIVE_V.3</div></div>', unsafe_allow_html=True)
+    c2.markdown('<div class="metric-card"><div style="font-size:10px; color:#444;">LATENCY</div><div style="color:#C8A96E; font-weight:600;">24ms</div></div>', unsafe_allow_html=True)
+    c3.markdown('<div class="metric-card"><div style="font-size:10px; color:#444;">DATABASE</div><div style="color:#C8A96E; font-weight:600;">SYNCED</div></div>', unsafe_allow_html=True)
+
+    st.markdown("<div style='height:40px'></div>", unsafe_allow_html=True)
+    
     # Styled File Upload
-    up = st.file_uploader("Upload", type=['pdf', 'docx'], label_visibility="collapsed")
+    up = st.file_uploader("Drop Contract", type=['pdf', 'docx'], label_visibility="collapsed")
     if up:
-        with st.status("Analyzing Legal Structure...", expanded=False):
-            time.sleep(1.5)
-            # DATABASE ACTION: Save new chat title
-            st.session_state.db_history.insert(0, {"id": str(uuid.uuid4()), "title": up.name[:20], "date": "Today"})
-            st.session_state.chat_history.append({"role": "user", "content": f"Audit {up.name}"})
-            st.session_state.chat_history.append({
-                "role": "ai", 
-                "content": f"Analysis complete for **{up.name}**. I've identified **3 high-exposure** clauses in the Liability section.",
-                "type": "report"
-            })
+        with st.status("Performing Multi-Vector Audit...", expanded=True) as status:
+            time.sleep(1.2)
+            st.write("Cross-referencing global precedents...")
+            time.sleep(1)
+            st.write("Extracting liability anchors...")
+            # DATABASE ACTION: New Entry
+            st.session_state.db.insert(0, {"id": str(uuid.uuid4()), "name": up.name, "score": "AUDITING..."})
+            st.session_state.chat_history.append({"role": "user", "content": f"Analyze {up.name}"})
+            st.session_state.chat_history.append({"role": "ai", "content": f"**Audit Complete.** Analysis of **{up.name}** reveals critical exposure in **Clause 14 (Indemnity)**. You are currently agreeing to a 100% uncapped liability window."})
             st.rerun()
 
-# Message Stream
+# 2. Chat Feed
 for msg in st.session_state.chat_history:
     if msg["role"] == "user":
-        st.markdown(f'<div class="user-row"><div class="user-bubble">{msg["content"]}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="user-bubble">{msg["content"]}</div>', unsafe_allow_html=True)
     else:
-        st.markdown('<div class="ai-row">', unsafe_allow_html=True)
-        st.markdown('<p style="font-family:JetBrains Mono; font-size:10px; color:#555; margin-bottom:0.8rem;">LEXAI ENGINE v.2.0</p>', unsafe_allow_html=True)
-        st.markdown(msg["content"])
-        
-        if msg.get("type") == "report":
-            st.markdown("""
-                <div class="report-card">
-                    <div style="display:flex; justify-content:space-between; margin-bottom:1rem;">
-                        <span style="color:#FF4B4B; font-size:11px; font-weight:700;">CRITICAL RISK</span>
-                        <span style="color:#555; font-size:11px; font-family:JetBrains Mono;">REF_ID: 8099</span>
-                    </div>
-                    <div style="font-weight:600; font-size:1.1rem; margin-bottom:0.5rem;">Uncapped Indemnification</div>
-                    <div style="color:#A1A1AA; font-size:0.9rem; line-height:1.5;">
-                        Clause 12.1 places an unlimited liability burden for indirect claims. This should be capped at 100% of the annual contract value to meet industry standards.
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
+        st.markdown('<div class="ai-bubble">', unsafe_allow_html=True)
+        st.markdown('<p style="font-family:JetBrains Mono; font-size:10px; color:#444; margin-bottom:10px;">LEX-COMMAND > OUTPUT_STREAM</p>', unsafe_allow_html=True)
+        st.write(msg["content"])
         st.markdown('</div>', unsafe_allow_html=True)
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# ─── INPUT SYSTEM ─────────────────────────────────────────────────────────────
-if prompt := st.chat_input("Ask a question or request a clause rewrite..."):
-    # If starting fresh via text, add to DB
+# ─── INPUT SYSTEM (THE COMMAND BAR) ──────────────────────────────────────────
+if prompt := st.chat_input("Input command or request rewrite..."):
+    # If starting fresh via text
     if not st.session_state.chat_history:
-        st.session_state.db_history.insert(0, {"id": str(uuid.uuid4()), "title": prompt[:15], "date": "Today"})
+        st.session_state.db.insert(0, {"id": str(uuid.uuid4()), "name": prompt[:15], "score": "GENERAL"})
         
     st.session_state.chat_history.append({"role": "user", "content": prompt})
     
-    with st.spinner("Thinking..."):
+    with st.spinner("Processing vector..."):
         time.sleep(1)
-        st.session_state.chat_history.append({
-            "role": "ai", 
-            "content": f"I've cross-referenced your request regarding **'{prompt}'**. I recommend adding a 'Force Majeure' carve-out to protect your delivery timelines during supply chain disruptions."
-        })
+        response = f"Scanning requested vector: **'{prompt}'**. Based on the current draft, this change would reduce your liability score by **12.4%**. Shall I draft the counter-clause for your review?"
+        st.session_state.chat_history.append({"role": "ai", "content": response})
     st.rerun()
+
+# ─── HUD STATUS BAR (BOTTOM) ──────────────────────────────────────────────────
+st.markdown("""
+    <div style="position: fixed; bottom: 10px; left: 300px; right: 20px; display: flex; justify-content: space-between; font-family: 'JetBrains Mono'; font-size: 10px; color: #222; pointer-events: none;">
+        <div>SYSTEM_STATUS: ENCRYPTED</div>
+        <div>JURISDICTION: GLOBAL_MAP_v2</div>
+    </div>
+""", unsafe_allow_html=True)
