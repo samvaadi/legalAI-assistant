@@ -8,3 +8,4 @@ IndicTransToolkit
 databricks-langchain
 requests
 langchain
+torch
