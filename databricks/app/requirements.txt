@@ -1,11 +1,8 @@
 streamlit
-databricks-sdk
-pandas
-databricks-sql-connectord
+databricks-sql-connector
 torch
 transformers
+sentencepiece
 IndicTransToolkit
-databricks-langchain
 requests
-langchain
-torch
+pandas

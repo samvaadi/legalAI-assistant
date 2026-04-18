@@ -1,17 +1,9 @@
 import streamlit as st
 import uuid
-import time
 import pandas as pd
 from databricks import sql
-import torch
-from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
-from IndicTransToolkit import IndicProcessor
 import requests
 
-
-# ─────────────────────────────────────────────────────────────
-# CONFIG
-# ─────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="ClauseBreaker",
     page_icon="⚖️",
@@ -21,15 +13,23 @@ st.set_page_config(
 TABLE_NAME = "default.chat_logs"
 
 # ─────────────────────────────────────────────────────────────
-# 🔥 LOAD MODELS (ONLY ONCE)
+# 🔥 LOAD MODELS (CACHED - only loads once)
 # ─────────────────────────────────────────────────────────────
+@st.cache_resource
+def load_translation_model():
+    import torch
+    from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+    from IndicTransToolkit import IndicProcessor
 
-
-model_name = "ai4bharat/indictrans2-en-indic-dist-200M"
-tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-model = AutoModelForSeq2SeqLM.from_pretrained(model_name, trust_remote_code=True)
-ip = IndicProcessor(inference=True)
-
+    model_name = "ai4bharat/indictrans2-en-indic-dist-200M"
+    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+    model = AutoModelForSeq2SeqLM.from_pretrained(
+        model_name,
+        trust_remote_code=True
+    )
+    model.eval()  # inference mode
+    ip = IndicProcessor(inference=True)
+    return tokenizer, model, ip
 
 # ─────────────────────────────────────────────────────────────
 # UI STYLING
@@ -121,7 +121,6 @@ def fetch_session_messages(sid):
                 ORDER BY ts ASC
             """, (sid,))
             rows = cursor.fetchall()
-
         return [{"role": r[0], "content": r[1]} for r in rows]
     except Exception:
         return []
@@ -131,8 +130,10 @@ def fetch_session_messages(sid):
 # 🔥 LLM FUNCTIONS
 # ─────────────────────────────────────────────────────────────
 def translate_to_hindi(text):
-    src_lang, tgt_lang = "eng_Latn", "hin_Deva"
+    import torch
+    tokenizer, model, ip = load_translation_model()
 
+    src_lang, tgt_lang = "eng_Latn", "hin_Deva"
     batch = ip.preprocess_batch([text], src_lang=src_lang, tgt_lang=tgt_lang)
 
     inputs = tokenizer(
@@ -181,21 +182,19 @@ Give:
         }
 
         response = requests.post(url, headers=headers, json=payload)
+        response.raise_for_status()
         result = response.json()
-
         english = result["choices"][0]["message"]["content"]
 
         hindi = translate_to_hindi(english)
 
-        return f"""
-### 🇬🇧 English:
+        return f"""### 🇬🇧 English:
 {english}
 
 ---
 
 ### 🇮🇳 Hindi:
-{hindi}
-"""
+{hindi}"""
 
     except Exception as e:
         return f"LLM Error: {e}"
@@ -277,7 +276,7 @@ if prompt := st.chat_input("Ask about your contract..."):
     save_to_db(st.session_state.sid, st.session_state.chat_title, "user", prompt)
 
     with st.spinner("Analyzing contract..."):
-        response = call_llm(prompt)   # 🔥 REAL AI HERE
+        response = call_llm(prompt)
 
     st.session_state.messages.append({"role": "assistant", "content": response})
     save_to_db(st.session_state.sid, st.session_state.chat_title, "assistant", response)
