@@ -5,7 +5,7 @@ import uuid
 import pandas as pd
 from io import StringIO
 
-st.set_page_config(page_title="ClauseBreaker", page_icon="⚖️", layout="wide")
+st.set_page_config(page_title="legalAI-Assistant", page_icon="⚖️", layout="wide")
 
 # ─────────────────────────────────────────────────────────────
 # 🎨 UI DESIGN SYSTEM
@@ -161,7 +161,7 @@ df = load_bns_data()
 # ─────────────────────────────────────────────────────────────
 st.markdown("""
 <h1 style='font-size:28px;'>⚖️ ClauseBreaker</h1>
-<p style='color:#888;'>AI Legal Assistant + General Chat</p>
+<p style='color:#888;'>Hello There User</p>
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────
@@ -169,7 +169,7 @@ st.markdown("""
 # ─────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("""
-    <h2>⚖️ ClauseBreaker</h2>
+    <h2>⚖️ legalAI-Assistance</h2>
     <p style='font-size:12px;color:#777;'>Legal AI System</p>
     """, unsafe_allow_html=True)
 
