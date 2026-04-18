@@ -3,3 +3,4 @@ command: ["streamlit", "run", "databricks/app/app.py"]
 env:
   - name: PYTHONUNBUFFERED
     value: "1"
+    

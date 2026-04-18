@@ -2,7 +2,7 @@ import streamlit as st
 import uuid
 import time
 import pandas as pd
-from databricks import sq
+from databricks import sql
 import torch
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 from IndicTransToolkit import IndicProcessor
