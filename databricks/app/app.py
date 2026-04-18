@@ -201,7 +201,6 @@ if "chat_title" not in st.session_state:
 with st.sidebar:
     st.markdown("## ⚖️ ClauseBreaker")
 
-    # DEBUG - remove after testing
     st.caption(f"Host: {'✅' if DB_HOST else '❌ NOT SET'}")
     st.caption(f"Token: {'✅' if DB_TOKEN else '❌ NOT SET'}")
     st.caption(f"Path: {'✅' if DB_PATH else '❌ NOT SET'}")
@@ -214,16 +213,21 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("### 🧠 Chat History")
-    history_df = load_history_list()
-    if history_df.empty:
-        st.caption("No past sessions")
-    else:
-        for _, row in history_df.iterrows():
-            if st.button(f"📄 {row['title']}", key=row["session_id"]):
-                st.session_state.sid = row["session_id"]
-                st.session_state.messages = fetch_session_messages(row["session_id"])
-                st.session_state.chat_title = row["title"]
-                st.rerun()
+    
+    # SAFE - won't crash if DB fails
+    try:
+        history_df = load_history_list()
+        if history_df.empty:
+            st.caption("No past sessions")
+        else:
+            for _, row in history_df.iterrows():
+                if st.button(f"📄 {row['title']}", key=row["session_id"]):
+                    st.session_state.sid = row["session_id"]
+                    st.session_state.messages = fetch_session_messages(row["session_id"])
+                    st.session_state.chat_title = row["title"]
+                    st.rerun()
+    except Exception as e:
+        st.caption(f"History unavailable: {e}")
 
 
 # ─────────────────────────────────────────────────────────────
