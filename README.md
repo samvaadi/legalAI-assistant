@@ -46,3 +46,5 @@ The system follows a Retrieval-Augmented Generation (RAG) workflow optimized for
 
 
 %pip install databricks-langchain langchain sentencepiece transformers torch IndicTransToolkit scikit-learn sentence-transformers
+
+link to our website - https://legitppl-7474659414650163.aws.databricksapps.com/
