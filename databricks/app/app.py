@@ -39,35 +39,6 @@ DB_TOKEN = get_cached_token()
 DB_PATH = os.environ.get("DB_PATH", "")
 
 # ─────────────────────────────────────────────────────────────
-# TRANSLATION MODEL
-# ─────────────────────────────────────────────────────────────
-@st.cache_resource(show_spinner="⏳ Loading translation model, please wait...")
-def load_translation_model():
-    import torch
-    from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
-    from IndicTransToolkit import IndicProcessor
-    model_name = "ai4bharat/indictrans2-en-indic-dist-200M"
-    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_name, trust_remote_code=True)
-    model.eval()
-    ip = IndicProcessor(inference=True)
-    return tokenizer, model, ip
-
-def translate_to_hindi(text):
-    import torch
-    try:
-        tokenizer, model, ip = load_translation_model()
-        src_lang, tgt_lang = "eng_Latn", "hin_Deva"
-        batch = ip.preprocess_batch([text], src_lang=src_lang, tgt_lang=tgt_lang)
-        inputs = tokenizer(batch, truncation=True, padding="longest", return_tensors="pt")
-        with torch.no_grad():
-            generated_tokens = model.generate(**inputs, num_beams=5, max_length=256)
-        translations = tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
-        return ip.postprocess_batch(translations, lang=tgt_lang)[0]
-    except Exception as e:
-        return f"[Translation failed: {e}]"
-
-# ─────────────────────────────────────────────────────────────
 # DB
 # ─────────────────────────────────────────────────────────────
 def get_db_conn():
@@ -131,13 +102,13 @@ def search_bns(query):
                     WHERE LOWER(description) LIKE '%{query.lower()}%'
                     LIMIT 3
                 """)
-                rows = cursor.fetchall()
-                return rows
+                return cursor.fetchall()
     except:
         return []
 
 # ─────────────────────────────────────────────────────────────
-# LLM
+# LLM — uses LLaMA for both answer + Hindi translation
+# Removed HuggingFace model (causes timeout in Databricks Apps)
 # ─────────────────────────────────────────────────────────────
 def call_llm(prompt):
     try:
@@ -147,33 +118,42 @@ def call_llm(prompt):
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
-        full_prompt = f"""
-You are a legal AI assistant for Indian law (BNS).
+
+        full_prompt = f"""You are a legal AI assistant specializing in Indian law (BNS - Bharatiya Nyaya Sanhita).
 
 User Query:
 {prompt}
 
-Give:
-- Explanation
-- Risks
-- Fix suggestions
+Respond in the following format EXACTLY:
+
+### 🇬🇧 English:
+**Explanation:**
+[Clear explanation of the legal clause or query]
+
+**Risks:**
+[Key legal risks involved]
+
+**Fix Suggestions:**
+[How to fix or safeguard against the issue]
+
+---
+
+### 🇮🇳 Hindi (हिंदी):
+**स्पष्टीकरण:**
+[Same explanation in Hindi]
+
+**जोखिम:**
+[Same risks in Hindi]
+
+**सुझाव:**
+[Same fix suggestions in Hindi]
 """
+
         response = requests.post(url, headers=headers, json={
             "messages": [{"role": "user", "content": full_prompt}]
         })
         response.raise_for_status()
-        english = response.json()["choices"][0]["message"]["content"]
-
-        with st.spinner("Translating to Hindi..."):
-            hindi = translate_to_hindi(english)
-
-        return f"""### 🇬🇧 English:
-{english}
-
----
-
-### 🇮🇳 Hindi:
-{hindi}"""
+        return response.json()["choices"][0]["message"]["content"]
 
     except Exception as e:
         return f"LLM Error: {e}"
