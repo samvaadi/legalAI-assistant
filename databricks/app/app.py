@@ -25,24 +25,15 @@ def get_oauth_token():
                 "client_id": os.environ.get("DATABRICKS_CLIENT_ID", ""),
                 "client_secret": os.environ.get("DATABRICKS_CLIENT_SECRET", "")
             },
-            timeout=10  # ← added timeout so it doesn't hang forever
+            timeout=10
         )
         return response.json().get("access_token", "")
     except Exception as e:
-        st.error(f"Auth failed: {e}")
         return ""
 
 DB_HOST = os.environ.get("DATABRICKS_HOST", "").replace("https://", "").rstrip("/")
 DB_PATH = os.environ.get("DB_PATH", "")
-
-# ── get token once, with visible status ──
-with st.sidebar:
-    st.markdown("## ⚖️ ClauseBreaker")
-    with st.spinner("🔐 Authenticating..."):
-        DB_TOKEN = get_oauth_token()
-    st.caption(f"Host: {'✅' if DB_HOST else '❌'}")
-    st.caption(f"Token: {'✅' if DB_TOKEN else '❌'}")
-    st.caption(f"Path: {'✅' if DB_PATH else '❌'}")
+DB_TOKEN = get_oauth_token()
 
 # ─────────────────────────────────────────────────────────────
 # DB
@@ -63,8 +54,8 @@ def save_to_db(sid, title, role, content):
                     (session_id, title, role, content, ts)
                     VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
                 """, (sid, title, role, content))
-    except Exception as e:
-        st.warning(f"DB save failed: {e}")
+    except:
+        pass
 
 def load_history_list():
     try:
@@ -75,8 +66,7 @@ def load_history_list():
                 GROUP BY session_id
                 ORDER BY MAX(ts) DESC
             """, conn)
-    except Exception as e:
-        st.warning(f"History load failed: {e}")
+    except:
         return pd.DataFrame()
 
 def fetch_session_messages(sid):
@@ -89,8 +79,7 @@ def fetch_session_messages(sid):
             """, (sid,))
             rows = cursor.fetchall()
         return [{"role": r[0], "content": r[1]} for r in rows]
-    except Exception as e:
-        st.warning(f"Session fetch failed: {e}")
+    except:
         return []
 
 # ─────────────────────────────────────────────────────────────
@@ -115,15 +104,18 @@ def search_bns(query):
         return []
 
 # ─────────────────────────────────────────────────────────────
-# LLM
+# LLM — uses Databricks Foundation Model API (pay-per-token)
+# Works on Free Edition, no endpoint deployment needed
 # ─────────────────────────────────────────────────────────────
 def call_llm(prompt):
     try:
         token = get_oauth_token()
         if not token:
-            return "❌ Could not get auth token. Check your DATABRICKS_CLIENT_ID and SECRET."
+            return "❌ Could not get auth token. Check DATABRICKS_CLIENT_ID and SECRET in app settings."
 
+        # Foundation Model API endpoint — no deployment needed
         url = f"https://{DB_HOST}/serving-endpoints/databricks-meta-llama-3-3-70b-instruct/invocations"
+
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
@@ -162,18 +154,27 @@ Respond in the following format EXACTLY:
         response = requests.post(
             url,
             headers=headers,
-            json={"messages": [{"role": "user", "content": full_prompt}]},
-            timeout=60  # ← added timeout
+            json={
+                "messages": [{"role": "user", "content": full_prompt}],
+                "max_tokens": 1024
+            },
+            timeout=60
         )
+
+        if response.status_code == 404:
+            return "❌ LLM endpoint not found. Please enable Foundation Model APIs in your Databricks workspace under **AI Gateway**."
+        if response.status_code == 401:
+            return "❌ Auth error. Your token may have expired or lacks permissions."
+        if response.status_code == 403:
+            return "❌ Access denied. Make sure Foundation Model APIs are enabled for your workspace."
+
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"]
 
     except requests.exceptions.Timeout:
-        return "❌ LLM request timed out. The serving endpoint may be cold — try again in 30 seconds."
-    except requests.exceptions.HTTPError as e:
-        return f"❌ LLM HTTP Error {e.response.status_code}: {e.response.text}"
+        return "❌ Request timed out after 60s. Try again."
     except Exception as e:
-        return f"❌ LLM Error: {e}"
+        return f"❌ Error: {e}"
 
 # ─────────────────────────────────────────────────────────────
 # SESSION STATE
@@ -188,9 +189,14 @@ if "history_loaded" not in st.session_state:
     st.session_state.history_loaded = False
 
 # ─────────────────────────────────────────────────────────────
-# SIDEBAR (continued)
+# SIDEBAR
 # ─────────────────────────────────────────────────────────────
 with st.sidebar:
+    st.markdown("## ⚖️ ClauseBreaker")
+    st.caption(f"Host: {'✅' if DB_HOST else '❌'}")
+    st.caption(f"Token: {'✅' if DB_TOKEN else '❌'}")
+    st.caption(f"Path: {'✅' if DB_PATH else '❌'}")
+
     if st.button("＋ New Chat", use_container_width=True):
         st.session_state.messages = []
         st.session_state.sid = str(uuid.uuid4())
