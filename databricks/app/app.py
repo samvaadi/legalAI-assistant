@@ -17,9 +17,13 @@ TABLE_NAME = "default.chat_logs"
 # OAUTH TOKEN - Databricks Apps uses client credentials
 # ─────────────────────────────────────────────────────────────
 def get_oauth_token():
-    host = os.environ.get("DATABRICKS_HOST", "")
+    host = os.environ.get("DATABRICKS_HOST", "").rstrip("/")
     client_id = os.environ.get("DATABRICKS_CLIENT_ID", "")
     client_secret = os.environ.get("DATABRICKS_CLIENT_SECRET", "")
+
+    # Make sure host has https://
+    if not host.startswith("https://"):
+        host = f"https://{host}"
 
     response = requests.post(
         f"{host}/oidc/v1/token",
@@ -32,7 +36,8 @@ def get_oauth_token():
     )
     return response.json().get("access_token", "")
 
-DB_HOST = os.environ.get("DATABRICKS_HOST", "").replace("https://", "")
+# Keep https:// removed only for DB_HOST used in SQL connection
+DB_HOST = os.environ.get("DATABRICKS_HOST", "").replace("https://", "").rstrip("/")
 DB_TOKEN = get_oauth_token()
 DB_PATH = os.environ.get("DB_PATH", "")
 
