@@ -2,13 +2,11 @@ import streamlit as st
 import uuid
 import time
 import pandas as pd
-from databricks import sql
-
-# 🔥 ADD THESE IMPORTS
-from databricks_langchain import ChatDatabricks
+from databricks import sq
 import torch
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 from IndicTransToolkit import IndicProcessor
+import requests
 
 
 # ─────────────────────────────────────────────────────────────
@@ -25,7 +23,7 @@ TABLE_NAME = "default.chat_logs"
 # ─────────────────────────────────────────────────────────────
 # 🔥 LOAD MODELS (ONLY ONCE)
 # ─────────────────────────────────────────────────────────────
-llm = ChatDatabricks(endpoint="databricks-meta-llama-3-3-70b-instruct")
+
 
 model_name = "ai4bharat/indictrans2-en-indic-dist-200M"
 tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
@@ -156,7 +154,15 @@ def translate_to_hindi(text):
 
 
 def call_llm(prompt):
-    full_prompt = f"""
+    try:
+        url = f"https://{st.secrets['DB_HOST']}/serving-endpoints/databricks-meta-llama-3-3-70b-instruct/invocations"
+
+        headers = {
+            "Authorization": f"Bearer {st.secrets['DB_TOKEN']}",
+            "Content-Type": "application/json"
+        }
+
+        full_prompt = f"""
 You are a legal AI assistant for Indian law (BNS).
 
 User Query:
@@ -168,12 +174,20 @@ Give:
 - Fix suggestions
 """
 
-    response = llm.invoke(full_prompt)
-    english = response.content
+        payload = {
+            "messages": [
+                {"role": "user", "content": full_prompt}
+            ]
+        }
 
-    hindi = translate_to_hindi(english)
+        response = requests.post(url, headers=headers, json=payload)
+        result = response.json()
 
-    return f"""
+        english = result["choices"][0]["message"]["content"]
+
+        hindi = translate_to_hindi(english)
+
+        return f"""
 ### 🇬🇧 English:
 {english}
 
@@ -182,6 +196,9 @@ Give:
 ### 🇮🇳 Hindi:
 {hindi}
 """
+
+    except Exception as e:
+        return f"LLM Error: {e}"
 
 
 # ─────────────────────────────────────────────────────────────
