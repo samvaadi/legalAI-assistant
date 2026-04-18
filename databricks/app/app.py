@@ -15,7 +15,13 @@ TABLE_NAME = "default.chat_logs"
 
 # Auto-injected by Databricks Apps
 DB_HOST = os.environ.get("DATABRICKS_HOST", "").replace("https://", "")
-DB_TOKEN = os.environ.get("DATABRICKS_TOKEN", "")
+# Try all possible token sources
+DB_TOKEN = (
+    os.environ.get("DATABRICKS_TOKEN") or
+    os.environ.get("DB_TOKEN") or
+    os.environ.get("GRPC_GATEWAY_TOKEN") or
+    ""
+)
 DB_PATH = os.environ.get("DB_PATH", "")
 
 # ─────────────────────────────────────────────────────────────
