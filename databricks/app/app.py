@@ -248,18 +248,23 @@ for m in st.session_state.messages:
 
 st.markdown('</div>', unsafe_allow_html=True)
 
+# Show loading message if model is being loaded
+if "model_loading" not in st.session_state:
+    st.session_state.model_loading = False
 
 # ─────────────────────────────────────────────────────────────
 # CHAT INPUT
 # ─────────────────────────────────────────────────────────────
-if prompt := st.chat_input("Ask about your contract..."):
+prompt = st.chat_input("Ask about your contract...")
+
+if prompt:
     if not st.session_state.messages:
         st.session_state.chat_title = prompt[:40]
 
     st.session_state.messages.append({"role": "user", "content": prompt})
     save_to_db(st.session_state.sid, st.session_state.chat_title, "user", prompt)
 
-    with st.spinner("Analyzing contract..."):
+    with st.spinner("⚖️ Analyzing contract... (first query may take 2-3 mins to load model)"):
         response = call_llm(prompt)
 
     st.session_state.messages.append({"role": "assistant", "content": response})
