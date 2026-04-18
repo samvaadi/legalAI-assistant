@@ -24,19 +24,25 @@ def get_oauth_token():
                 "scope": "all-apis",
                 "client_id": os.environ.get("DATABRICKS_CLIENT_ID", ""),
                 "client_secret": os.environ.get("DATABRICKS_CLIENT_SECRET", "")
-            }
+            },
+            timeout=10  # ← added timeout so it doesn't hang forever
         )
         return response.json().get("access_token", "")
-    except:
+    except Exception as e:
+        st.error(f"Auth failed: {e}")
         return ""
 
-@st.cache_resource(show_spinner="🔐 Authenticating with Databricks...")
-def get_cached_token():
-    return get_oauth_token()
-
 DB_HOST = os.environ.get("DATABRICKS_HOST", "").replace("https://", "").rstrip("/")
-DB_TOKEN = get_cached_token()
 DB_PATH = os.environ.get("DB_PATH", "")
+
+# ── get token once, with visible status ──
+with st.sidebar:
+    st.markdown("## ⚖️ ClauseBreaker")
+    with st.spinner("🔐 Authenticating..."):
+        DB_TOKEN = get_oauth_token()
+    st.caption(f"Host: {'✅' if DB_HOST else '❌'}")
+    st.caption(f"Token: {'✅' if DB_TOKEN else '❌'}")
+    st.caption(f"Path: {'✅' if DB_PATH else '❌'}")
 
 # ─────────────────────────────────────────────────────────────
 # DB
@@ -57,8 +63,8 @@ def save_to_db(sid, title, role, content):
                     (session_id, title, role, content, ts)
                     VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
                 """, (sid, title, role, content))
-    except:
-        pass
+    except Exception as e:
+        st.warning(f"DB save failed: {e}")
 
 def load_history_list():
     try:
@@ -69,7 +75,8 @@ def load_history_list():
                 GROUP BY session_id
                 ORDER BY MAX(ts) DESC
             """, conn)
-    except:
+    except Exception as e:
+        st.warning(f"History load failed: {e}")
         return pd.DataFrame()
 
 def fetch_session_messages(sid):
@@ -82,7 +89,8 @@ def fetch_session_messages(sid):
             """, (sid,))
             rows = cursor.fetchall()
         return [{"role": r[0], "content": r[1]} for r in rows]
-    except:
+    except Exception as e:
+        st.warning(f"Session fetch failed: {e}")
         return []
 
 # ─────────────────────────────────────────────────────────────
@@ -107,12 +115,14 @@ def search_bns(query):
         return []
 
 # ─────────────────────────────────────────────────────────────
-# LLM — uses LLaMA for both answer + Hindi translation
-# Removed HuggingFace model (causes timeout in Databricks Apps)
+# LLM
 # ─────────────────────────────────────────────────────────────
 def call_llm(prompt):
     try:
         token = get_oauth_token()
+        if not token:
+            return "❌ Could not get auth token. Check your DATABRICKS_CLIENT_ID and SECRET."
+
         url = f"https://{DB_HOST}/serving-endpoints/databricks-meta-llama-3-3-70b-instruct/invocations"
         headers = {
             "Authorization": f"Bearer {token}",
@@ -149,14 +159,21 @@ Respond in the following format EXACTLY:
 [Same fix suggestions in Hindi]
 """
 
-        response = requests.post(url, headers=headers, json={
-            "messages": [{"role": "user", "content": full_prompt}]
-        })
+        response = requests.post(
+            url,
+            headers=headers,
+            json={"messages": [{"role": "user", "content": full_prompt}]},
+            timeout=60  # ← added timeout
+        )
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"]
 
+    except requests.exceptions.Timeout:
+        return "❌ LLM request timed out. The serving endpoint may be cold — try again in 30 seconds."
+    except requests.exceptions.HTTPError as e:
+        return f"❌ LLM HTTP Error {e.response.status_code}: {e.response.text}"
     except Exception as e:
-        return f"LLM Error: {e}"
+        return f"❌ LLM Error: {e}"
 
 # ─────────────────────────────────────────────────────────────
 # SESSION STATE
@@ -171,14 +188,9 @@ if "history_loaded" not in st.session_state:
     st.session_state.history_loaded = False
 
 # ─────────────────────────────────────────────────────────────
-# SIDEBAR
+# SIDEBAR (continued)
 # ─────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("## ⚖️ ClauseBreaker")
-    st.caption(f"Host: {'✅' if DB_HOST else '❌'}")
-    st.caption(f"Token: {'✅' if DB_TOKEN else '❌'}")
-    st.caption(f"Path: {'✅' if DB_PATH else '❌'}")
-
     if st.button("＋ New Chat", use_container_width=True):
         st.session_state.messages = []
         st.session_state.sid = str(uuid.uuid4())
