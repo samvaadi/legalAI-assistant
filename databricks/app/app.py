@@ -182,12 +182,12 @@ if "chat_title" not in st.session_state:
 with st.sidebar:
     st.markdown("## ⚖️ ClauseBreaker")
 
-    # DEBUG - remove after testing
+    # DEBUG
     st.caption(f"Host: {'✅' if DB_HOST else '❌ NOT SET'}")
     st.caption(f"Token: {'✅' if DB_TOKEN else '❌ NOT SET'}")
     st.caption(f"Path: {'✅' if DB_PATH else '❌ NOT SET'}")
 
-     st.markdown("### All ENV VARS:")
+    st.markdown("### All ENV VARS:")
     for k, v in os.environ.items():
         if any(x in k.upper() for x in ['TOKEN', 'DATABRICKS', 'SECRET', 'DB_']):
             st.caption(f"{k}: {'✅' if v else '❌'}")
@@ -197,6 +197,19 @@ with st.sidebar:
         st.session_state.sid = str(uuid.uuid4())
         st.session_state.chat_title = "New Chat"
         st.rerun()
+
+    st.markdown("---")
+    st.markdown("### 🧠 Chat History")
+    history_df = load_history_list()
+    if history_df.empty:
+        st.caption("No past sessions")
+    else:
+        for _, row in history_df.iterrows():
+            if st.button(f"📄 {row['title']}", key=row["session_id"]):
+                st.session_state.sid = row["session_id"]
+                st.session_state.messages = fetch_session_messages(row["session_id"])
+                st.session_state.chat_title = row["title"]
+                st.rerun()
 
     st.markdown("---")
     st.markdown("### 🧠 Chat History")
