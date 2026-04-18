@@ -187,6 +187,11 @@ with st.sidebar:
     st.caption(f"Token: {'✅' if DB_TOKEN else '❌ NOT SET'}")
     st.caption(f"Path: {'✅' if DB_PATH else '❌ NOT SET'}")
 
+     st.markdown("### All ENV VARS:")
+    for k, v in os.environ.items():
+        if any(x in k.upper() for x in ['TOKEN', 'DATABRICKS', 'SECRET', 'DB_']):
+            st.caption(f"{k}: {'✅' if v else '❌'}")
+
     if st.button("＋ New Chat", use_container_width=True):
         st.session_state.messages = []
         st.session_state.sid = str(uuid.uuid4())
