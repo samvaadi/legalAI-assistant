@@ -12,6 +12,28 @@
 * **Databricks Native:** Fully optimized for Databricks Unity Catalog and Model Serving (Llama-3/Mistral).
 * **CPU Optimized:** High-performance vector search implemented using NumPy and Scikit-learn, making it cost-effective for deployment.
 
+## 🧪 Test Cases & Capabilities
+
+### Case 1: Bilingual Support (Hindi Input/Output)
+The assistant can process queries in Hinglish/Hindi and provide detailed legal explanations in Hindi, ensuring accessibility for non-English speakers.
+![Hindi QnA Capability](hindi_QnA.jpeg)
+*Caption: Example of the assistant handling a bike theft query and providing legal context on defamation in Hindi.*
+
+### Case 2: Out-of-Scope Intent Handling
+The system is robust against irrelevant queries, maintaining its persona as a specialized legal AI and refusing to provide non-legal information.
+![Response to Irrelevant Qs](response_to_irrelevant_Qs.jpeg)
+*Caption: The model correctly identifying a recipe request as irrelevant to the BNS legal framework.*
+
+### Case 3: Complex Legal Reasoning
+Nyaya-Sahayak can analyze complex scenarios, such as self-defense, by pulling multiple relevant sections from the BNS to provide a nuanced perspective.
+![Generic Legal QnA](generic_QnA.jpeg)
+*Caption: Analyzing a self-defense scenario using Preliminary sections and definitions of "injury" from the BNS.*
+
+### Case 4: Handling Severe Criminal Offenses
+For serious crimes like organ trafficking and illegal drug administration, the model accurately identifies the gravity of the offense and recommends relevant legal statutes and professional legal consultation.
+![Enlisting Several Crimes](enlisting_several_crimes.jpeg)
+*Caption: The assistant identifying severe crimes (drugging and organ trafficking) and directing the user toward the appropriate legal frameworks and authorities.*
+
 ---
 
 ## 🏗️ Architecture
