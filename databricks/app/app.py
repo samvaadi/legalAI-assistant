@@ -13,15 +13,27 @@ st.set_page_config(
 
 TABLE_NAME = "default.chat_logs"
 
-# Auto-injected by Databricks Apps
+# ─────────────────────────────────────────────────────────────
+# OAUTH TOKEN - Databricks Apps uses client credentials
+# ─────────────────────────────────────────────────────────────
+def get_oauth_token():
+    host = os.environ.get("DATABRICKS_HOST", "")
+    client_id = os.environ.get("DATABRICKS_CLIENT_ID", "")
+    client_secret = os.environ.get("DATABRICKS_CLIENT_SECRET", "")
+
+    response = requests.post(
+        f"{host}/oidc/v1/token",
+        data={
+            "grant_type": "client_credentials",
+            "scope": "all-apis",
+            "client_id": client_id,
+            "client_secret": client_secret
+        }
+    )
+    return response.json().get("access_token", "")
+
 DB_HOST = os.environ.get("DATABRICKS_HOST", "").replace("https://", "")
-# Try all possible token sources
-DB_TOKEN = (
-    os.environ.get("DATABRICKS_TOKEN") or
-    os.environ.get("DB_TOKEN") or
-    os.environ.get("GRPC_GATEWAY_TOKEN") or
-    ""
-)
+DB_TOKEN = get_oauth_token()
 DB_PATH = os.environ.get("DB_PATH", "")
 
 # ─────────────────────────────────────────────────────────────
@@ -128,9 +140,11 @@ def translate_to_hindi(text):
 # ─────────────────────────────────────────────────────────────
 def call_llm(prompt):
     try:
+        # Refresh token for each call
+        token = get_oauth_token()
         url = f"https://{DB_HOST}/serving-endpoints/databricks-meta-llama-3-3-70b-instruct/invocations"
         headers = {
-            "Authorization": f"Bearer {DB_TOKEN}",
+            "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
         full_prompt = f"""
@@ -182,34 +196,16 @@ if "chat_title" not in st.session_state:
 with st.sidebar:
     st.markdown("## ⚖️ ClauseBreaker")
 
-    # DEBUG
+    # DEBUG - remove after testing
     st.caption(f"Host: {'✅' if DB_HOST else '❌ NOT SET'}")
     st.caption(f"Token: {'✅' if DB_TOKEN else '❌ NOT SET'}")
     st.caption(f"Path: {'✅' if DB_PATH else '❌ NOT SET'}")
-
-    st.markdown("### All ENV VARS:")
-    for k, v in os.environ.items():
-        if any(x in k.upper() for x in ['TOKEN', 'DATABRICKS', 'SECRET', 'DB_']):
-            st.caption(f"{k}: {'✅' if v else '❌'}")
 
     if st.button("＋ New Chat", use_container_width=True):
         st.session_state.messages = []
         st.session_state.sid = str(uuid.uuid4())
         st.session_state.chat_title = "New Chat"
         st.rerun()
-
-    st.markdown("---")
-    st.markdown("### 🧠 Chat History")
-    history_df = load_history_list()
-    if history_df.empty:
-        st.caption("No past sessions")
-    else:
-        for _, row in history_df.iterrows():
-            if st.button(f"📄 {row['title']}", key=row["session_id"]):
-                st.session_state.sid = row["session_id"]
-                st.session_state.messages = fetch_session_messages(row["session_id"])
-                st.session_state.chat_title = row["title"]
-                st.rerun()
 
     st.markdown("---")
     st.markdown("### 🧠 Chat History")
@@ -249,7 +245,7 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────────────────────
-# CHAT INPUT - always visible at bottom
+# CHAT INPUT
 # ─────────────────────────────────────────────────────────────
 if prompt := st.chat_input("Ask about your contract..."):
     if not st.session_state.messages:
