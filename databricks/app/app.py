@@ -4,6 +4,7 @@ import requests
 import uuid
 import pandas as pd
 from io import StringIO
+from databricks import sql
 
 st.set_page_config(page_title="ClauseBreaker", page_icon="⚖️", layout="wide")
 
@@ -32,10 +33,51 @@ def get_oauth_token():
 
 DB_HOST = os.environ.get("DATABRICKS_HOST", "").replace("https://", "").rstrip("/")
 DB_TOKEN = get_oauth_token()
+DB_PATH = os.environ.get("DB_PATH")
+
 VOLUME_PATH = "/Volumes/workspace/default/bns_dataset/bns_sections.csv"
 
 # ─────────────────────────────────────────────────────────────
-# LOAD DATASET FROM DATABRICKS VOLUME via DBFS API
+# DB CONNECTION
+# ─────────────────────────────────────────────────────────────
+def get_db_conn():
+    return sql.connect(
+        server_hostname=DB_HOST,
+        http_path=DB_PATH,
+        access_token=DB_TOKEN
+    )
+
+# ─────────────────────────────────────────────────────────────
+# SAVE CHAT
+# ─────────────────────────────────────────────────────────────
+def save_chat(role, content):
+    try:
+        with get_db_conn() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO default.chat_logs (session_id, role, content)
+                    VALUES (?, ?, ?)
+                """, (st.session_state.sid, role, content))
+    except Exception as e:
+        print("DB error:", e)
+
+# ─────────────────────────────────────────────────────────────
+# LOAD CHAT
+# ─────────────────────────────────────────────────────────────
+def load_chat():
+    try:
+        with get_db_conn() as conn:
+            return pd.read_sql(f"""
+                SELECT role, content
+                FROM default.chat_logs
+                WHERE session_id = '{st.session_state.sid}'
+                ORDER BY ts
+            """, conn)
+    except:
+        return pd.DataFrame()
+
+# ─────────────────────────────────────────────────────────────
+# LOAD DATASET
 # ─────────────────────────────────────────────────────────────
 @st.cache_data(show_spinner="Loading BNS dataset...")
 def load_bns_data():
@@ -43,64 +85,59 @@ def load_bns_data():
         url = f"https://{DB_HOST}/api/2.0/fs/files{VOLUME_PATH}"
         headers = {"Authorization": f"Bearer {DB_TOKEN}"}
         response = requests.get(url, headers=headers)
-        df = pd.read_csv(StringIO(response.text))
-        return df
+        return pd.read_csv(StringIO(response.text))
     except Exception as e:
-        st.error(f"Failed to load dataset: {e}")
+        st.error(f"Dataset error: {e}")
         return pd.DataFrame()
 
 # ─────────────────────────────────────────────────────────────
-# SEARCH RELEVANT SECTIONS
+# SEARCH (RAG)
 # ─────────────────────────────────────────────────────────────
-def search_sections(query: str, df: pd.DataFrame, top_k: int = 5) -> str:
+def search_sections(query, df, top_k=5):
     if df.empty:
         return "No dataset available."
 
     query_words = set(query.lower().split())
-
-    # Score each row by keyword overlap across all text columns
     text_cols = df.select_dtypes(include="object").columns.tolist()
 
-    def score_row(row):
-        combined = " ".join(str(row[c]) for c in text_cols).lower()
-        return sum(1 for w in query_words if w in combined)
+    def score(row):
+        text = " ".join(str(row[c]) for c in text_cols).lower()
+        return sum(1 for w in query_words if w in text)
 
     df = df.copy()
-    df["_score"] = df.apply(score_row, axis=1)
+    df["_score"] = df.apply(score, axis=1)
     top = df[df["_score"] > 0].sort_values("_score", ascending=False).head(top_k)
 
     if top.empty:
         return "No relevant sections found."
 
-    # Format results
-    results = []
-    for _, row in top.iterrows():
-        results.append("\n".join(f"{col}: {row[col]}" for col in text_cols))
-    return "\n\n---\n\n".join(results)
+    return "\n\n---\n\n".join(
+        "\n".join(f"{col}: {row[col]}" for col in text_cols)
+        for _, row in top.iterrows()
+    )
 
 # ─────────────────────────────────────────────────────────────
 # SESSION STATE
 # ─────────────────────────────────────────────────────────────
-if "messages" not in st.session_state:
-    st.session_state.messages = []
 if "sid" not in st.session_state:
     st.session_state.sid = str(uuid.uuid4())
+
+if "messages" not in st.session_state:
+    df_chat = load_chat()
+    st.session_state.messages = df_chat.to_dict("records") if not df_chat.empty else []
+
+df = load_bns_data()
 
 # ─────────────────────────────────────────────────────────────
 # SIDEBAR
 # ─────────────────────────────────────────────────────────────
-df = load_bns_data()
-
 with st.sidebar:
     st.markdown("## ⚖️ ClauseBreaker")
-    st.caption(f"Host: {'✅' if DB_HOST else '❌'}")
-    st.caption(f"Token: {'✅' if DB_TOKEN else '❌'}")
+
+    st.caption(f"DB: {'✅' if DB_TOKEN else '❌'}")
     st.caption(f"Dataset rows: {len(df) if not df.empty else '❌'}")
 
-    if not df.empty:
-        st.caption(f"Columns: {', '.join(df.columns.tolist())}")
-
-    if st.button("＋ New Chat", use_container_width=True):
+    if st.button("＋ New Chat"):
         st.session_state.messages = []
         st.session_state.sid = str(uuid.uuid4())
         st.rerun()
@@ -113,55 +150,77 @@ for m in st.session_state.messages:
         st.write(m["content"])
 
 # ─────────────────────────────────────────────────────────────
-# CHAT INPUT
+# INPUT
 # ─────────────────────────────────────────────────────────────
-if prompt := st.chat_input("Ask about BNS sections..."):
+if prompt := st.chat_input("Ask anything (legal or normal)..."):
+
+    # SAVE USER
     st.session_state.messages.append({"role": "user", "content": prompt})
+    save_chat("user", prompt)
 
     with st.chat_message("user"):
         st.write(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("Searching BNS sections..."):
+        with st.spinner("Thinking..."):
 
-            # 1. Retrieve relevant sections from CSV
+            # 🔍 Retrieve dataset context
             context = search_sections(prompt, df)
 
-            # 2. Build RAG prompt
-            rag_prompt = f"""You are a legal assistant specializing in the Bharatiya Nyaya Sanhita (BNS).
-Use ONLY the following BNS sections to answer the user's question.
-If the answer is not in the provided sections, say so clearly.
+            # 🧠 Decide mode (RAG vs Normal)
+            use_rag = context != "No relevant sections found."
 
-RELEVANT BNS SECTIONS:
+            if use_rag:
+                final_prompt = f"""
+You are a legal AI specializing in BNS law.
+
+Use the following context:
+
 {context}
 
-USER QUESTION:
+User Question:
 {prompt}
 
-Answer clearly and cite the section numbers where applicable."""
+Answer with reasoning + section references.
+"""
+            else:
+                final_prompt = f"""
+You are a helpful AI assistant.
 
-            # 3. Send to Llama
+User:
+{prompt}
+"""
+
             try:
                 url = f"https://{DB_HOST}/serving-endpoints/databricks-meta-llama-3-3-70b-instruct/invocations"
+
                 headers = {
                     "Authorization": f"Bearer {DB_TOKEN}",
                     "Content-Type": "application/json"
                 }
-                
-                # Build conversation history
-                history = [{"role": m["role"], "content": m["content"]} 
-                          for m in st.session_state.messages[:-1]]
-                history.append({"role": "user", "content": rag_prompt})
 
-                response = requests.post(url, headers=headers, json={"messages": history})
+                history = st.session_state.messages[:-1] + [
+                    {"role": "user", "content": final_prompt}
+                ]
+
+                response = requests.post(
+                    url,
+                    headers=headers,
+                    json={"messages": history},
+                    timeout=20
+                )
+
                 answer = response.json()["choices"][0]["message"]["content"]
+
             except Exception as e:
                 answer = f"Error: {e}"
 
         st.write(answer)
 
-        # Show retrieved context in expander
-        with st.expander("📄 Retrieved BNS Sections"):
-            st.text(context)
+        if use_rag:
+            with st.expander("📄 Retrieved Legal Context"):
+                st.text(context)
 
+    # SAVE ASSISTANT
     st.session_state.messages.append({"role": "assistant", "content": answer})
+    save_chat("assistant", answer)
