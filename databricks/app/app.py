@@ -30,14 +30,18 @@ def get_oauth_token():
     except:
         return ""
 
+@st.cache_resource(show_spinner="🔐 Authenticating with Databricks...")
+def get_cached_token():
+    return get_oauth_token()
+
 DB_HOST = os.environ.get("DATABRICKS_HOST", "").replace("https://", "").rstrip("/")
-DB_TOKEN = get_oauth_token()
+DB_TOKEN = get_cached_token()
 DB_PATH = os.environ.get("DB_PATH", "")
 
 # ─────────────────────────────────────────────────────────────
 # TRANSLATION MODEL
 # ─────────────────────────────────────────────────────────────
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner="⏳ Loading translation model, please wait...")
 def load_translation_model():
     import torch
     from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
@@ -111,6 +115,28 @@ def fetch_session_messages(sid):
         return []
 
 # ─────────────────────────────────────────────────────────────
+# BNS SEARCH
+# ─────────────────────────────────────────────────────────────
+def search_bns(query):
+    try:
+        with sql.connect(
+            server_hostname=DB_HOST,
+            http_path=DB_PATH,
+            access_token=DB_TOKEN
+        ) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(f"""
+                    SELECT section, section_name, description
+                    FROM default.bns_sections
+                    WHERE LOWER(description) LIKE '%{query.lower()}%'
+                    LIMIT 3
+                """)
+                rows = cursor.fetchall()
+                return rows
+    except:
+        return []
+
+# ─────────────────────────────────────────────────────────────
 # LLM
 # ─────────────────────────────────────────────────────────────
 def call_llm(prompt):
@@ -161,6 +187,8 @@ if "sid" not in st.session_state:
     st.session_state.sid = str(uuid.uuid4())
 if "chat_title" not in st.session_state:
     st.session_state.chat_title = "New Chat"
+if "history_loaded" not in st.session_state:
+    st.session_state.history_loaded = False
 
 # ─────────────────────────────────────────────────────────────
 # SIDEBAR
@@ -175,23 +203,30 @@ with st.sidebar:
         st.session_state.messages = []
         st.session_state.sid = str(uuid.uuid4())
         st.session_state.chat_title = "New Chat"
+        st.session_state.history_loaded = False
         st.rerun()
 
     st.markdown("---")
     st.markdown("### 🧠 Chat History")
-    try:
-        history_df = load_history_list()
-        if history_df.empty:
+
+    if not st.session_state.history_loaded:
+        if st.button("📂 Load History", use_container_width=True):
+            st.session_state.history_loaded = True
+            st.rerun()
+    else:
+        try:
+            history_df = load_history_list()
+            if history_df.empty:
+                st.caption("No past sessions")
+            else:
+                for _, row in history_df.iterrows():
+                    if st.button(f"📄 {row['title']}", key=row["session_id"]):
+                        st.session_state.sid = row["session_id"]
+                        st.session_state.messages = fetch_session_messages(row["session_id"])
+                        st.session_state.chat_title = row["title"]
+                        st.rerun()
+        except:
             st.caption("No past sessions")
-        else:
-            for _, row in history_df.iterrows():
-                if st.button(f"📄 {row['title']}", key=row["session_id"]):
-                    st.session_state.sid = row["session_id"]
-                    st.session_state.messages = fetch_session_messages(row["session_id"])
-                    st.session_state.chat_title = row["title"]
-                    st.rerun()
-    except:
-        st.caption("No past sessions")
 
 # ─────────────────────────────────────────────────────────────
 # CHAT UI
