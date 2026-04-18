@@ -1,4 +1,4 @@
-# ⚖️ Nyaya-Sahayak: LegalAI Assistant
+# ⚖️ LegalAI-Assistance-ClauseBreaker
 
 **Nyaya-Sahayak** is an agentic RAG-based legal assistant designed to bridge the gap between complex Indian law and the common citizen. By leveraging the **Bharatiya Nyaya Sanhita (BNS)** dataset and state-of-the-art Indic embedding models, it provides context-aware, empathetic, and bilingual legal guidance.
 
