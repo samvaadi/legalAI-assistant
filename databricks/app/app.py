@@ -8,7 +8,78 @@ from io import StringIO
 st.set_page_config(page_title="ClauseBreaker", page_icon="⚖️", layout="wide")
 
 # ─────────────────────────────────────────────────────────────
-# CONFIG
+# 🎨 UI DESIGN SYSTEM
+# ─────────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'Inter', sans-serif;
+}
+
+.stApp {
+    background: #0a0a0a;
+    color: #e5e5e5;
+}
+
+/* Sidebar */
+section[data-testid="stSidebar"] {
+    background: #111111;
+    border-right: 1px solid #1f1f1f;
+}
+
+/* Chat bubbles */
+.chat-user {
+    background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+    padding: 12px 16px;
+    border-radius: 18px 18px 4px 18px;
+    color: white;
+    margin-left: auto;
+    max-width: 75%;
+    font-size: 14px;
+}
+
+.chat-ai {
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    padding: 14px 18px;
+    border-radius: 6px 18px 18px 18px;
+    max-width: 75%;
+    font-size: 14px;
+}
+
+/* Input */
+.stChatInputContainer {
+    background: #0a0a0a !important;
+    border-top: 1px solid #222;
+    padding: 10px;
+}
+
+/* Buttons */
+.stButton button {
+    background: #1f1f1f;
+    color: white;
+    border-radius: 10px;
+    border: 1px solid #333;
+}
+
+.stButton button:hover {
+    background: #2a2a2a;
+}
+
+/* Expander */
+details {
+    background: #111;
+    border-radius: 10px;
+    padding: 10px;
+    border: 1px solid #222;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────
+# 🧠 CONFIG
 # ─────────────────────────────────────────────────────────────
 def get_oauth_token():
     host = os.environ.get("DATABRICKS_HOST", "").rstrip("/")
@@ -35,7 +106,7 @@ DB_TOKEN = get_oauth_token()
 VOLUME_PATH = "/Volumes/workspace/default/bns_dataset/bns_sections.csv"
 
 # ─────────────────────────────────────────────────────────────
-# LOAD DATASET FROM DATABRICKS VOLUME via DBFS API
+# 📂 LOAD DATASET
 # ─────────────────────────────────────────────────────────────
 @st.cache_data(show_spinner="Loading BNS dataset...")
 def load_bns_data():
@@ -43,125 +114,143 @@ def load_bns_data():
         url = f"https://{DB_HOST}/api/2.0/fs/files{VOLUME_PATH}"
         headers = {"Authorization": f"Bearer {DB_TOKEN}"}
         response = requests.get(url, headers=headers)
-        df = pd.read_csv(StringIO(response.text))
-        return df
+        return pd.read_csv(StringIO(response.text))
     except Exception as e:
-        st.error(f"Failed to load dataset: {e}")
+        st.error(f"Dataset error: {e}")
         return pd.DataFrame()
 
 # ─────────────────────────────────────────────────────────────
-# SEARCH RELEVANT SECTIONS
+# 🔍 SEARCH (RAG)
 # ─────────────────────────────────────────────────────────────
-def search_sections(query: str, df: pd.DataFrame, top_k: int = 5) -> str:
+def search_sections(query, df, top_k=5):
     if df.empty:
         return "No dataset available."
 
     query_words = set(query.lower().split())
-
-    # Score each row by keyword overlap across all text columns
     text_cols = df.select_dtypes(include="object").columns.tolist()
 
-    def score_row(row):
-        combined = " ".join(str(row[c]) for c in text_cols).lower()
-        return sum(1 for w in query_words if w in combined)
+    def score(row):
+        text = " ".join(str(row[c]) for c in text_cols).lower()
+        return sum(1 for w in query_words if w in text)
 
     df = df.copy()
-    df["_score"] = df.apply(score_row, axis=1)
+    df["_score"] = df.apply(score, axis=1)
     top = df[df["_score"] > 0].sort_values("_score", ascending=False).head(top_k)
 
     if top.empty:
         return "No relevant sections found."
 
-    # Format results
-    results = []
-    for _, row in top.iterrows():
-        results.append("\n".join(f"{col}: {row[col]}" for col in text_cols))
-    return "\n\n---\n\n".join(results)
+    return "\n\n---\n\n".join(
+        "\n".join(f"{col}: {row[col]}" for col in text_cols)
+        for _, row in top.iterrows()
+    )
 
 # ─────────────────────────────────────────────────────────────
-# SESSION STATE
+# 🧠 SESSION
 # ─────────────────────────────────────────────────────────────
 if "messages" not in st.session_state:
     st.session_state.messages = []
+
 if "sid" not in st.session_state:
     st.session_state.sid = str(uuid.uuid4())
 
-# ─────────────────────────────────────────────────────────────
-# SIDEBAR
-# ─────────────────────────────────────────────────────────────
 df = load_bns_data()
 
+# ─────────────────────────────────────────────────────────────
+# 🧾 HEADER
+# ─────────────────────────────────────────────────────────────
+st.markdown("""
+<h1 style='font-size:28px;'>⚖️ ClauseBreaker</h1>
+<p style='color:#888;'>AI Legal Assistant + General Chat</p>
+""", unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────
+# 📌 SIDEBAR
+# ─────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("## ⚖️ ClauseBreaker")
-    st.caption(f"Host: {'✅' if DB_HOST else '❌'}")
-    st.caption(f"Token: {'✅' if DB_TOKEN else '❌'}")
+    st.markdown("""
+    <h2>⚖️ ClauseBreaker</h2>
+    <p style='font-size:12px;color:#777;'>Legal AI System</p>
+    """, unsafe_allow_html=True)
+
     st.caption(f"Dataset rows: {len(df) if not df.empty else '❌'}")
 
-    if not df.empty:
-        st.caption(f"Columns: {', '.join(df.columns.tolist())}")
-
-    if st.button("＋ New Chat", use_container_width=True):
+    if st.button("＋ New Chat"):
         st.session_state.messages = []
         st.session_state.sid = str(uuid.uuid4())
         st.rerun()
 
 # ─────────────────────────────────────────────────────────────
-# CHAT UI
+# 💬 CHAT DISPLAY
 # ─────────────────────────────────────────────────────────────
 for m in st.session_state.messages:
-    with st.chat_message(m["role"]):
-        st.write(m["content"])
+    if m["role"] == "user":
+        st.markdown(f'<div class="chat-user">{m["content"]}</div>', unsafe_allow_html=True)
+    else:
+        st.markdown(f'<div class="chat-ai">{m["content"]}</div>', unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────
-# CHAT INPUT
+# 💬 INPUT
 # ─────────────────────────────────────────────────────────────
-if prompt := st.chat_input("Ask about BNS sections..."):
+if prompt := st.chat_input("Ask anything (legal or normal)..."):
+
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-    with st.chat_message("user"):
-        st.write(prompt)
+    st.markdown(f'<div class="chat-user">{prompt}</div>', unsafe_allow_html=True)
 
-    with st.chat_message("assistant"):
-        with st.spinner("Searching BNS sections..."):
+    with st.spinner("Thinking..."):
 
-            # 1. Retrieve relevant sections from CSV
-            context = search_sections(prompt, df)
+        context = search_sections(prompt, df)
+        use_rag = context != "No relevant sections found."
 
-            # 2. Build RAG prompt
-            rag_prompt = f"""You are a legal assistant specializing in the Bharatiya Nyaya Sanhita (BNS).
-Use ONLY the following BNS sections to answer the user's question.
-If the answer is not in the provided sections, say so clearly.
+        if use_rag:
+            final_prompt = f"""
+You are a legal AI specializing in BNS law.
 
-RELEVANT BNS SECTIONS:
+Context:
 {context}
 
-USER QUESTION:
+User Question:
 {prompt}
 
-Answer clearly and cite the section numbers where applicable."""
+Answer with reasoning + section references.
+"""
+        else:
+            final_prompt = f"""
+You are a helpful assistant.
 
-            # 3. Send to Llama
-            try:
-                url = f"https://{DB_HOST}/serving-endpoints/databricks-meta-llama-3-3-70b-instruct/invocations"
-                headers = {
-                    "Authorization": f"Bearer {DB_TOKEN}",
-                    "Content-Type": "application/json"
-                }
-                
-                # Build conversation history
-                history = [{"role": m["role"], "content": m["content"]} 
-                          for m in st.session_state.messages[:-1]]
-                history.append({"role": "user", "content": rag_prompt})
+User:
+{prompt}
+"""
 
-                response = requests.post(url, headers=headers, json={"messages": history})
-                answer = response.json()["choices"][0]["message"]["content"]
-            except Exception as e:
-                answer = f"Error: {e}"
+        try:
+            url = f"https://{DB_HOST}/serving-endpoints/databricks-meta-llama-3-3-70b-instruct/invocations"
 
-        st.write(answer)
+            headers = {
+                "Authorization": f"Bearer {DB_TOKEN}",
+                "Content-Type": "application/json"
+            }
 
-        # Show retrieved context in expander
-        with st.expander("📄 Retrieved BNS Sections"):
+            history = st.session_state.messages[:-1] + [
+                {"role": "user", "content": final_prompt}
+            ]
+
+            response = requests.post(
+                url,
+                headers=headers,
+                json={"messages": history},
+                timeout=20
+            )
+
+            answer = response.json()["choices"][0]["message"]["content"]
+
+        except Exception as e:
+            answer = f"Error: {e}"
+
+    st.markdown(f'<div class="chat-ai">{answer}</div>', unsafe_allow_html=True)
+
+    if use_rag:
+        with st.expander("📄 Retrieved Legal Context"):
             st.text(context)
 
     st.session_state.messages.append({"role": "assistant", "content": answer})
