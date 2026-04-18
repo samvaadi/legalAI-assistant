@@ -1,4 +1,8 @@
 streamlit
 databricks-sdk
 pandas
-atabricks-sql-connector
+databricks-sql-connectord
+torch
+transformers
+IndicTransToolkit
+databricks-langchain
