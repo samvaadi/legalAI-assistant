@@ -13,27 +13,10 @@ st.set_page_config(
 
 TABLE_NAME = "default.chat_logs"
 
-# Databricks Apps injects these automatically!
+# Auto-injected by Databricks Apps
 DB_HOST = os.environ.get("DATABRICKS_HOST", "").replace("https://", "")
 DB_TOKEN = os.environ.get("DATABRICKS_TOKEN", "")
-DB_PATH = os.environ.get("DB_PATH", "")  # only this one you need to set manually
-
-# ─────────────────────────────────────────────────────────────
-# LOAD MODELS (CACHED)
-# ─────────────────────────────────────────────────────────────
-@st.cache_resource
-def load_translation_model():
-    import torch
-    from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
-    from IndicTransToolkit import IndicProcessor
-
-    model_name = "ai4bharat/indictrans2-en-indic-dist-200M"
-    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_name, trust_remote_code=True)
-    model.eval()
-    ip = IndicProcessor(inference=True)
-    return tokenizer, model, ip
-
+DB_PATH = os.environ.get("DB_PATH", "")
 
 # ─────────────────────────────────────────────────────────────
 # UI STYLING
@@ -53,6 +36,22 @@ header, footer { visibility: hidden; }
 .user-bubble { background: #27272A; padding: 10px 16px; border-radius: 12px; }
 </style>
 """, unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────────────────────
+# LOAD MODEL - lazy, cached, only when needed
+# ─────────────────────────────────────────────────────────────
+@st.cache_resource(show_spinner=False)
+def load_translation_model():
+    import torch
+    from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+    from IndicTransToolkit import IndicProcessor
+    model_name = "ai4bharat/indictrans2-en-indic-dist-200M"
+    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+    model = AutoModelForSeq2SeqLM.from_pretrained(model_name, trust_remote_code=True)
+    model.eval()
+    ip = IndicProcessor(inference=True)
+    return tokenizer, model, ip
 
 
 # ─────────────────────────────────────────────────────────────
@@ -144,7 +143,9 @@ Give:
         })
         response.raise_for_status()
         english = response.json()["choices"][0]["message"]["content"]
-        hindi = translate_to_hindi(english)
+
+        with st.spinner("Translating to Hindi..."):
+            hindi = translate_to_hindi(english)
 
         return f"""### 🇬🇧 English:
 {english}
@@ -174,6 +175,12 @@ if "chat_title" not in st.session_state:
 # ─────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## ⚖️ ClauseBreaker")
+
+    # DEBUG - remove after testing
+    st.caption(f"Host: {'✅' if DB_HOST else '❌ NOT SET'}")
+    st.caption(f"Token: {'✅' if DB_TOKEN else '❌ NOT SET'}")
+    st.caption(f"Path: {'✅' if DB_PATH else '❌ NOT SET'}")
+
     if st.button("＋ New Chat", use_container_width=True):
         st.session_state.messages = []
         st.session_state.sid = str(uuid.uuid4())
@@ -198,24 +205,38 @@ with st.sidebar:
 # CHAT UI
 # ─────────────────────────────────────────────────────────────
 st.markdown('<div class="chat-container">', unsafe_allow_html=True)
+
 for m in st.session_state.messages:
     if m["role"] == "user":
-        st.markdown(f'<div class="user-block"><div class="user-bubble">{m["content"]}</div></div>', unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class="user-block">
+            <div class="user-bubble">{m["content"]}</div>
+        </div>
+        """, unsafe_allow_html=True)
     else:
-        st.markdown(f'<div class="ai-block"><b>⚖️ ClauseBreaker</b><br><br>{m["content"]}</div>', unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class="ai-block">
+            <b>⚖️ ClauseBreaker</b><br><br>
+            {m["content"]}
+        </div>
+        """, unsafe_allow_html=True)
+
 st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────────────────────
-# INPUT
+# CHAT INPUT - always visible at bottom
 # ─────────────────────────────────────────────────────────────
 if prompt := st.chat_input("Ask about your contract..."):
     if not st.session_state.messages:
         st.session_state.chat_title = prompt[:40]
+
     st.session_state.messages.append({"role": "user", "content": prompt})
     save_to_db(st.session_state.sid, st.session_state.chat_title, "user", prompt)
+
     with st.spinner("Analyzing contract..."):
         response = call_llm(prompt)
+
     st.session_state.messages.append({"role": "assistant", "content": response})
     save_to_db(st.session_state.sid, st.session_state.chat_title, "assistant", response)
     st.rerun()
