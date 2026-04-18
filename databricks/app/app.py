@@ -160,7 +160,7 @@ df = load_bns_data()
 # 🧾 HEADER
 # ─────────────────────────────────────────────────────────────
 st.markdown("""
-<h1 style='font-size:28px;'>⚖️ ClauseBreaker</h1>
+<h1 style='font-size:28px;'>⚖️ legalAI-Assistance</h1>
 <p style='color:#888;'>Hello There User</p>
 """, unsafe_allow_html=True)
 
