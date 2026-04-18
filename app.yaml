@@ -1,6 +1,5 @@
 command: ["streamlit", "run", "databricks/app/app.py"]
 
 env:
-  - name: PYTHONUNBUFFERED
-    value: "1"
-    
+  - name: DB_PATH
+    value: "/sql/1.0/warehouses/your-warehouse-id"
