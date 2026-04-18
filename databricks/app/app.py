@@ -252,24 +252,30 @@ for m in st.session_state.messages:
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# Show loading message if model is being loaded
-if "model_loading" not in st.session_state:
-    st.session_state.model_loading = False
-
 # ─────────────────────────────────────────────────────────────
-# CHAT INPUT
+# CHAT INPUT - using columns to mimic chat input
 # ─────────────────────────────────────────────────────────────
-prompt = st.chat_input("Ask about your contract...")
+col1, col2 = st.columns([8, 1])
 
-if prompt:
+with col1:
+    user_input = st.text_input(
+        "message",
+        placeholder="Ask about your contract...",
+        label_visibility="collapsed",
+        key="user_input"
+    )
+with col2:
+    send = st.button("➤", use_container_width=True)
+
+if send and user_input:
     if not st.session_state.messages:
-        st.session_state.chat_title = prompt[:40]
+        st.session_state.chat_title = user_input[:40]
 
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    save_to_db(st.session_state.sid, st.session_state.chat_title, "user", prompt)
+    st.session_state.messages.append({"role": "user", "content": user_input})
+    save_to_db(st.session_state.sid, st.session_state.chat_title, "user", user_input)
 
-    with st.spinner("⚖️ Analyzing contract... (first query may take 2-3 mins to load model)"):
-        response = call_llm(prompt)
+    with st.spinner("⚖️ Analyzing contract..."):
+        response = call_llm(user_input)
 
     st.session_state.messages.append({"role": "assistant", "content": response})
     save_to_db(st.session_state.sid, st.session_state.chat_title, "assistant", response)
